@@ -1,66 +1,36 @@
-# exchange-simulator-front
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Interfaz Next.js para el backend **exchange-simulator** construida con App Router, TailwindCSS, shadcn/ui y TanStack Query.
+## Getting Started
 
-## Requisitos
-
-- Node.js 18+
-- pnpm 8+
-
-## Variables de entorno
-
-| Variable | Descripción | Valor por defecto |
-| --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | URL base del backend REST | `http://localhost:3001` |
-| `NEXT_PUBLIC_WS_URL` | Host del WebSocket | `ws://localhost:3001` |
-| `NEXT_PUBLIC_WS_PATH` | Path del WebSocket | `/ws` |
-
-Colocá las variables en un archivo `.env.local` si necesitás personalizarlas.
-
-## Scripts
+First, run the development server:
 
 ```bash
-pnpm install
-pnpm dev        # inicia la app en http://localhost:3000
-pnpm build      # compila para producción
-pnpm start      # sirve la build
-pnpm lint       # ejecuta ESLint
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-> **Nota:** En este entorno de ejercicios el registro NPM puede requerir autenticación. Si `pnpm install` falla con `ERR_PNPM_FETCH_403`, configurá un mirror accesible o instalá manualmente los paquetes.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Regenerar tipos de API
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-Los tipos de la API REST se generan desde Swagger con `openapi-typescript`:
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-```bash
-pnpm generate:api-types
-```
+## Learn More
 
-El comando descargará el esquema desde `http://localhost:3001/api-docs/openapi.json` y escribirá `src/lib/api-types.ts`.
+To learn more about Next.js, take a look at the following resources:
 
-## Flujo de uso
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-### Datasets
-1. Navegá a **Datasets**.
-2. Registrá un dataset indicando nombre, ruta y formato.
-3. Usá el botón **Ingestar** de cada fila para disparar la ingesta. El listado se puede refrescar con **Actualizar**.
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-### Explorar
-1. En **Explorar mercado**, seleccioná un símbolo activo y un intervalo (o ingresá uno personalizado).
-2. Definí fechas en epoch ms y límite de filas.
-3. Presioná **Buscar klines** para mostrar las velas en una tabla y ver el contador de filas devueltas.
+## Deploy on Vercel
 
-### Sesiones
-1. En **Sesiones**, completá el formulario (símbolos separados por coma, intervalo, rango temporal, velocidad y seed) y creá la sesión.
-2. Desde el listado, controlá cada sesión con **Start**, **Pause**, **Resume** o abrí el **Detalle**.
-3. En el detalle podés iniciar/pausar/seekear y conectar un stream WebSocket. Las últimas velas recibidas aparecen en la tabla y el badge indica bots conectados cuando el backend envía `stats`.
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-### Cuenta
-1. Entrá en **Cuenta**.
-2. Elegí una sesión desde el selector (persistido en la URL).
-3. Se listan los balances (`asset`, `free`, `locked`) retornados por `/api/v3/account`.
-
-### Swagger
-
-La vista **Swagger** embebe la documentación interactiva del backend en un iframe para consultar contratos rápidamente.
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
