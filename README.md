@@ -50,27 +50,6 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 
 
+(Opcional) README.md
 
-1. `src/components/ui/select.tsx`
-
-   * Ajustar `SelectContent` para que tenga **fondo opaco**, **sombra**, **borde**, **máxima altura** y **overflow-y-auto** (scroll interno).
-   * (Si ya permite `className`, solo agregar clases; si no, exponer la prop y aplicarla).
-
-2. `src/app/datasets/page.tsx`
-
-   * Pasar `className`/props al `SelectContent` del **intervalo** (scroll + fondo).
-   * Reemplazar el `Select` de **símbolos** por un combobox **buscable** (ver punto 3).
-
-3. **Nuevos componentes para combobox buscable** (patrón shadcn “Command + Popover”):
-
-   * `src/components/ui/command.tsx` (wrapper del componente `cmdk`).
-   * `src/components/ui/popover.tsx` (wrapper de `@radix-ui/react-popover`).
-   * `src/components/ComboBox.tsx` (nuevo, reutilizable; recibe `options`, `value`, `onChange`, `placeholder`; filtra en vivo mientras tipeás y muestra lista con scroll y fondo).
-
-> Nota de dependencias (si no están ya):
->
-> * `cmdk`
-> * `@radix-ui/react-popover`
->   (shadcn/ui suele usarlos; si no están en tu proyecto, hay que agregarlos en `package.json`).
-
-Si te va, pasame primero **`src/components/ui/select.tsx`** y lo dejo con las clases de fondo/scroll. Luego te doy el **`ComboBox.tsx`** (+ `command.tsx` y `popover.tsx`) y por último te devuelvo el **`page.tsx`** actualizado para usar el combobox en “Par” y el `Select` con scroll en “Temporalidad”.
+Notas rápidas: cómo resetear DB (borrar data/market.duckdb*) y cómo inspeccionar el esquema.
