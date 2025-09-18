@@ -3,36 +3,43 @@
 import { FormEvent, useMemo, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import type { DatasetSummary } from "@/lib/api-types";
+import { ComboBox } from "@/components/ComboBox";
+
+import type { DatasetSummary, Interval } from "@/lib/api-types";
 import {
-  useCreateDataset,
-  useDatasets,
-  useIngestDataset,
+  useCreateDataset, useDatasets, useIngestDataset,
+  useSymbols, useIntervals, useAvailableRange,
 } from "@/lib/hooks";
 import { formatDateTime } from "@/lib/time";
 
+const INTERVAL_VALUES: [Interval, ...Interval[]] = [
+  "1m","3m","5m","15m","30m",
+  "1h","2h","4h","6h","8h","12h",
+  "1d","3d","1w","1M",
+];
+
 const datasetSchema = z.object({
-  name: z.string().min(1, "Ingresá un nombre"),
-  path: z.string().min(1, "Ingresá una ruta"),
-  format: z.enum(["csv", "parquet"]),
+  symbol: z.string().min(1, "Seleccioná un par"),
+  interval: z.enum(INTERVAL_VALUES),
+  startTime: z.coerce.number().int().min(0, "Fecha inválida"),
+  endTime: z.coerce.number().int().min(0, "Fecha inválida"),
+  name: z.string().min(1, "Nombre requerido"),
+}).refine(d => d.endTime > d.startTime, {
+  message: "El fin debe ser mayor al inicio",
+  path: ["endTime"],
 });
 
 export default function DatasetsPage() {
-  const [formState, setFormState] = useState({
-    name: "",
-    path: "",
-    format: "csv" as const,
+  const [formState, setFormState] = useState<{
+    symbol: string; interval: Interval | ""; startLocal: string; endLocal: string;
+  }>({
+    symbol: "", interval: "" as any, startLocal: "", endLocal: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -40,68 +47,76 @@ export default function DatasetsPage() {
   const createDataset = useCreateDataset();
   const ingestDataset = useIngestDataset();
 
-  const columns = useMemo<DataTableColumn<DatasetSummary>[]>(
-    () => [
-      { key: "name", header: "Nombre" },
-      { key: "path", header: "Ruta" },
-      { key: "format", header: "Formato" },
-      {
-        key: "createdAt",
-        header: "Creado",
-        render: (row) => formatDateTime(new Date(row.createdAt).getTime()),
-      },
-      {
-        key: "actions",
-        header: "Acciones",
-        render: (row) => (
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={ingestDataset.isPending}
-            onClick={async () => {
-              try {
-                await ingestDataset.mutateAsync(row.id);
-                toast.success(`Ingesta iniciada para ${row.name}`);
-              } catch (error) {
-                const message =
-                  error instanceof Error
-                    ? error.message
-                    : "No se pudo iniciar la ingesta";
-                toast.error(message);
-              }
-            }}
-          >
-            Ingestar
-          </Button>
-        ),
-      },
-    ],
-    [ingestDataset]
-  );
+  // dropdowns on-demand (intervals sigue usando Select)
+  const [intervalsOpen, setIntervalsOpen] = useState(false);
+  const symbolsQuery = useSymbols(true);        // cargamos de una para el ComboBox
+  const intervalsQuery = useIntervals(intervalsOpen);
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const parseResult = datasetSchema.safeParse(formState);
-    if (!parseResult.success) {
-      const fieldErrors: Record<string, string> = {};
-      for (const issue of parseResult.error.issues) {
-        if (issue.path[0]) {
-          fieldErrors[String(issue.path[0])] = issue.message;
-        }
-      }
-      setErrors(fieldErrors);
+  const rangeQuery = useAvailableRange(formState.symbol, formState.interval);
+
+  // Helpers de conversión
+  const toMs = (local: string) => (local ? new Date(local).getTime() : 0);
+  const fromMs = (ms: number) => new Date(ms).toISOString().slice(0,16); // yyyy-MM-ddTHH:mm
+
+  const r = rangeQuery.data;
+  const minLocal = r ? fromMs(r.firstOpenTime) : undefined;
+  const maxLocal = r ? fromMs(r.lastCloseTime) : undefined;
+
+  const columns = useMemo<DataTableColumn<DatasetSummary>[]>(() => [
+    { key: "symbol", header: "Par" },
+    { key: "interval", header: "Intervalo" },
+    { key: "startTime", header: "Desde", render: (row) => formatDateTime(row.startTime) },
+    { key: "endTime", header: "Hasta", render: (row) => formatDateTime(row.endTime) },
+    { key: "status", header: "Estado" },
+    {
+      key: "actions",
+      header: "Acciones",
+      render: (row) => (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={ingestDataset.isPending || row.status === "ingesting"}
+          onClick={async () => {
+            try {
+              await ingestDataset.mutateAsync(row.id);
+              toast.success(`Ingesta iniciada para ${row.symbol} ${row.interval}`);
+            } catch (e:any) {
+              toast.error(e?.message ?? "No se pudo iniciar la ingesta");
+            }
+          }}
+        >
+          Ingestar
+        </Button>
+      ),
+    },
+  ], [ingestDataset]);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      symbol: formState.symbol,
+      interval: formState.interval as Interval,
+      startTime: toMs(formState.startLocal || minLocal || ""),
+      endTime: toMs(formState.endLocal || maxLocal || ""),
+      name: `${formState.symbol}-${formState.interval}`,
+    };
+    const p = datasetSchema.safeParse(payload);
+    if (!p.success) {
+      const m: Record<string,string> = {};
+      p.error.issues.forEach(i => {
+        const k = (i.path[0] as string) || "form";
+        m[k] = i.message;
+      });
+      setErrors(m);
       return;
     }
-
     setErrors({});
     try {
-      await createDataset.mutateAsync(parseResult.data);
+      await createDataset.mutateAsync(p.data);
       toast.success("Dataset creado");
-      setFormState({ name: "", path: "", format: "csv" });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo crear el dataset";
-      toast.error(message);
+      setFormState({ symbol:"", interval: "" as any, startLocal:"", endLocal:"" });
+    } catch (e:any) {
+      toast.error(e?.message ?? "No se pudo crear el dataset");
     }
   };
 
@@ -110,7 +125,7 @@ export default function DatasetsPage() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Datasets</h1>
         <p className="text-sm text-muted-foreground">
-          Registrá nuevas fuentes de datos y lanzá la ingesta directamente desde la UI.
+          Registrá datasets desde Binance y lanzá la ingesta desde la UI.
         </p>
       </header>
 
@@ -118,11 +133,7 @@ export default function DatasetsPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Listado</h2>
-            <Button
-              size="sm"
-              onClick={() => datasetsQuery.refetch()}
-              disabled={datasetsQuery.isFetching}
-            >
+            <Button size="sm" onClick={() => datasetsQuery.refetch()} disabled={datasetsQuery.isFetching}>
               Actualizar
             </Button>
           </div>
@@ -142,59 +153,87 @@ export default function DatasetsPage() {
         <div className="rounded-lg border p-4">
           <h2 className="text-lg font-semibold">Registrar dataset</h2>
           <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+            {/* Par (ComboBox buscable) */}
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="name">
-                Nombre
-              </label>
-              <Input
-                id="name"
-                value={formState.name}
-                onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, name: event.target.value }))
+              <label className="text-sm font-medium">Par</label>
+              <ComboBox
+                options={(symbolsQuery.data ?? []).map(s => ({ label: s.symbol, value: s.symbol }))}
+                value={formState.symbol}
+                onChange={(v) =>
+                  setFormState((s) => ({ ...s, symbol: v, startLocal: "", endLocal: "" }))
                 }
-                placeholder="BTCUSDT 2017-2020"
+                placeholder="Seleccioná un par"
+                inputPlaceholder="Buscar par (p. ej., BTC)"
+                disabled={symbolsQuery.isLoading}
               />
-              {errors.name ? (
-                <p className="text-xs text-destructive">{errors.name}</p>
-              ) : null}
+              {errors.symbol && <p className="text-xs text-destructive">{errors.symbol}</p>}
             </div>
 
+            {/* Interval (Select con fondo y scroll; la búsqueda tipiada básica la hace Radix) */}
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="path">
-                Ruta
-              </label>
-              <Input
-                id="path"
-                value={formState.path}
-                onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, path: event.target.value }))
-                }
-                placeholder="/data/binance/btcusdt.csv"
-              />
-              {errors.path ? (
-                <p className="text-xs text-destructive">{errors.path}</p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Formato</label>
+              <label className="text-sm font-medium">Temporalidad</label>
               <Select
-                value={formState.format}
-                onValueChange={(value: "csv" | "parquet") =>
-                  setFormState((prev) => ({ ...prev, format: value }))
+                onOpenChange={setIntervalsOpen}
+                value={formState.interval}
+                onValueChange={(v: Interval) =>
+                  setFormState((s) => ({ ...s, interval: v, startLocal: "", endLocal: "" }))
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccioná el formato" />
+                  <SelectValue placeholder="Seleccioná la temporalidad" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="csv">CSV</SelectItem>
-                  <SelectItem value="parquet">Parquet</SelectItem>
+                  {intervalsQuery.isLoading ? (
+                    <div className="p-2 text-sm">Cargando...</div>
+                  ) : (intervalsQuery.data ?? []).map((i) => (
+                    <SelectItem key={i} value={i}>{i}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {errors.interval && <p className="text-xs text-destructive">{errors.interval}</p>}
             </div>
 
-            <Button type="submit" className="w-full" disabled={createDataset.isPending}>
+            {/* Range */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Desde</label>
+                <Input
+                  type="datetime-local"
+                  min={minLocal}
+                  max={maxLocal}
+                  value={formState.startLocal || (minLocal ?? "")}
+                  onChange={(e) => setFormState((s) => ({ ...s, startLocal: e.target.value }))}
+                  disabled={!r}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Hasta</label>
+                <Input
+                  type="datetime-local"
+                  min={minLocal}
+                  max={maxLocal}
+                  value={formState.endLocal || (maxLocal ?? "")}
+                  onChange={(e) => setFormState((s) => ({ ...s, endLocal: e.target.value }))}
+                  disabled={!r}
+                />
+                {(errors.startTime || errors.endTime) && (
+                  <p className="text-xs text-destructive">
+                    {errors.startTime || errors.endTime}
+                  </p>
+                )}
+                {(!r && formState.symbol && formState.interval) && (
+                  <p className="text-xs text-muted-foreground">
+                    Obteniendo rango disponible para {formState.symbol} {formState.interval}...
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={createDataset.isPending || !formState.symbol || !formState.interval}
+            >
               {createDataset.isPending ? "Guardando..." : "Registrar"}
             </Button>
           </form>

@@ -38,13 +38,44 @@ async function unwrap<T>(promise: Promise<T>): Promise<T> {
   } catch (error) {
     if (error instanceof HTTPError) {
       const data = await error.response.json().catch(() => null);
-      const message = data?.message ?? error.message;
+      const message = (data?.error ?? data?.message) ?? error.message;
       throw new Error(message);
     }
     throw error;
   }
 }
 
+/** ====== Binance proxy ====== */
+export interface SymbolInfo {
+  symbol: string;
+  base: string;
+  quote: string;
+  active: boolean;
+}
+
+export interface AvailableRange {
+  symbol: string;
+  interval: string;
+  firstOpenTime: number; // ms
+  lastCloseTime: number; // ms
+}
+
+export function getBinanceSymbols() {
+  return unwrap(apiClient.get("api/v1/binance/symbols").json<SymbolInfo[]>());
+}
+
+export function getBinanceIntervals() {
+  return unwrap(apiClient.get("api/v1/binance/intervals").json<string[]>());
+}
+
+export function getAvailableRange(symbol: string, interval: string) {
+  const searchParams = new URLSearchParams({ symbol, interval });
+  return unwrap(
+    apiClient.get("api/v1/binance/range", { searchParams }).json<AvailableRange>()
+  );
+}
+
+/** ====== Market data (sim) ====== */
 export function getExchangeInfo() {
   return unwrap(
     apiClient.get("api/v1/exchangeInfo").json<ExchangeInfoResponse>()
@@ -68,9 +99,7 @@ export async function getKlines(params: FetchKlinesParams) {
   if (params.limit) searchParams.set("limit", String(params.limit));
 
   const raw = await unwrap<unknown[]>(
-    apiClient
-      .get("api/v3/klines", { searchParams })
-      .json<unknown[]>()
+    apiClient.get("api/v3/klines", { searchParams }).json<unknown[]>()
   );
 
   return raw.map((entry) => {
@@ -90,6 +119,7 @@ export async function getKlines(params: FetchKlinesParams) {
   });
 }
 
+/** ====== Datasets ====== */
 export function listDatasets() {
   return unwrap(apiClient.get("api/v1/datasets").json<DatasetSummary[]>());
 }
@@ -106,6 +136,7 @@ export function ingestDataset(id: string) {
   );
 }
 
+/** ====== Sessions ====== */
 export function createSession(payload: SessionRequest) {
   return unwrap(
     apiClient.post("api/v1/sessions", { json: payload }).json<SessionResponse>()
@@ -142,6 +173,7 @@ export function seekSession(id: string, timestamp: number) {
   );
 }
 
+/** ====== Account ====== */
 export function getSessionsAccount(sessionId: string) {
   return unwrap(
     apiClient

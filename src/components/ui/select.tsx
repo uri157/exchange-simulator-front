@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -38,21 +38,34 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
+        // Fondo opaco + blur opcional, borde y sombra más marcada
+        "relative z-50 min-w-[8rem] overflow-hidden rounded-md border border-border bg-background/95 text-foreground shadow-lg supports-[backdrop-filter]:backdrop-blur",
         position === "popper" && "translate-y-1",
         className
       )}
       position={position}
       {...props}
     >
+      {/* Botón de scroll arriba (aparece cuando hay overflow) */}
+      <SelectPrimitive.ScrollUpButton className="flex cursor-default items-center justify-center py-1 text-muted-foreground">
+        <ChevronUp className="h-4 w-4" />
+      </SelectPrimitive.ScrollUpButton>
+
       <SelectPrimitive.Viewport
         className={cn(
-          "p-1",
-          position === "popper" && "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+          // Scroll interno y altura máxima
+          "p-1 max-h-64 overflow-y-auto",
+          position === "popper" &&
+            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
         )}
       >
         {children}
       </SelectPrimitive.Viewport>
+
+      {/* Botón de scroll abajo */}
+      <SelectPrimitive.ScrollDownButton className="flex cursor-default items-center justify-center py-1 text-muted-foreground">
+        <ChevronDown className="h-4 w-4" />
+      </SelectPrimitive.ScrollDownButton>
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
 ));
@@ -112,5 +125,5 @@ export {
   SelectContent,
   SelectLabel,
   SelectItem,
-  SelectSeparator
+  SelectSeparator,
 };

@@ -7,14 +7,21 @@ import {
 } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type { CreateDatasetRequest, SessionRequest } from "@/lib/api-types";
+import type {
+  CreateDatasetRequest,
+  SessionRequest,
+  Interval,
+  AvailableRange,
+} from "@/lib/api-types";
 import {
   createDataset,
   createSession,
+  getBinanceSymbols,
+  getBinanceIntervals,
+  getAvailableRange,
   getKlines,
   getSession,
   getSessionsAccount,
-  getExchangeInfo,
   ingestDataset,
   listDatasets,
   listSessions,
@@ -24,7 +31,10 @@ import {
   startSession,
   type FetchKlinesParams,
   type RestKline,
+  type SymbolInfo,
 } from "@/lib/api";
+
+// --- Datasets ---
 
 export function useDatasets() {
   return useQuery({
@@ -53,13 +63,36 @@ export function useIngestDataset() {
   });
 }
 
-export function useExchangeInfo() {
+// --- Binance Helpers ---
+
+export function useSymbols(enabled = false) {
   return useQuery({
-    queryKey: ["exchange", "info"],
-    queryFn: getExchangeInfo,
+    queryKey: ["binance", "symbols"],
+    queryFn: getBinanceSymbols,
+    enabled,
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+export function useIntervals(enabled = false) {
+  return useQuery({
+    queryKey: ["binance", "intervals"],
+    queryFn: getBinanceIntervals,
+    enabled,
+    staleTime: Infinity,
+  });
+}
+
+export function useAvailableRange(symbol?: string, interval?: string) {
+  return useQuery({
+    queryKey: ["binance", "range", symbol, interval],
+    queryFn: () => getAvailableRange(symbol as string, interval as string),
+    enabled: Boolean(symbol && interval),
     staleTime: 1000 * 60,
   });
 }
+
+// --- Klines ---
 
 export function useKlines(params: FetchKlinesParams | null) {
   return useQuery({
@@ -69,6 +102,14 @@ export function useKlines(params: FetchKlinesParams | null) {
     staleTime: 0,
   });
 }
+
+export function useKlineTableData(klines: RestKline[]) {
+  return useMemo(() => klines.sort((a, b) => b.closeTime - a.closeTime), [
+    klines,
+  ]);
+}
+
+// --- Sessions ---
 
 export function useSessions() {
   return useQuery({
@@ -142,16 +183,12 @@ export function useSessionSeek() {
   });
 }
 
+// --- Account ---
+
 export function useAccount(sessionId: string | null) {
   return useQuery({
     queryKey: ["account", sessionId],
     queryFn: () => getSessionsAccount(sessionId as string),
     enabled: Boolean(sessionId),
   });
-}
-
-export function useKlineTableData(klines: RestKline[]) {
-  return useMemo(() => klines.sort((a, b) => b.closeTime - a.closeTime), [
-    klines,
-  ]);
 }

@@ -13,21 +13,48 @@ export interface ExchangeInfoResponse {
   symbols: ExchangeInfoSymbol[];
 }
 
-export type DatasetFormat = "csv" | "parquet";
+export type Interval =
+  | "1m"
+  | "3m"
+  | "5m"
+  | "15m"
+  | "30m"
+  | "1h"
+  | "2h"
+  | "4h"
+  | "6h"
+  | "8h"
+  | "12h"
+  | "1d"
+  | "3d"
+  | "1w"
+  | "1M";
+
+export interface AvailableRange {
+  symbol: string;
+  interval: Interval;
+  firstOpenTime: number; // ms epoch
+  lastCloseTime: number; // ms epoch
+}
 
 export interface DatasetSummary {
   id: string;
   name: string;
-  path: string;
-  format: DatasetFormat;
+  symbol: string;
+  interval: Interval;
+  startTime: number;
+  endTime: number;
+  status: "registered" | "ingesting" | "ready" | "failed";
   createdAt: string;
   updatedAt?: string;
 }
 
 export interface CreateDatasetRequest {
   name: string;
-  path: string;
-  format: DatasetFormat;
+  symbol: string;
+  interval: Interval;
+  startTime: number;
+  endTime: number;
 }
 
 export interface SessionRequest {
@@ -36,7 +63,7 @@ export interface SessionRequest {
   startTime: number;
   endTime: number;
   speed: number;
-  seed: number;
+  seed?: number;
 }
 
 export type SessionStatus =
