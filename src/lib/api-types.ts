@@ -75,8 +75,8 @@ export type SessionStatus =
 export interface SessionResponse extends SessionRequest {
   id: string;
   status: SessionStatus;
-  createdAt: string;
-  updatedAt?: string;
+  createdAt: number;
+  updatedAt?: number;
 }
 
 export interface AccountBalance {

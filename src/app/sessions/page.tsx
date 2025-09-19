@@ -58,8 +58,8 @@ export default function SessionsPage() {
     formState.symbol || null
   );
   const datasetRangeQuery = useDatasetRange(
-    formState.symbol || undefined,
-    formState.interval || undefined
+    formState.symbol || null,
+    formState.interval || null
   );
   const range = datasetRangeQuery.data ?? null;
 
@@ -151,7 +151,7 @@ export default function SessionsPage() {
       {
         key: "createdAt",
         header: "Creado",
-        render: (row) => formatDateTime(new Date(row.createdAt).getTime()),
+        render: (row) => formatDateTime(row.createdAt),
       },
       {
         key: "actions",
