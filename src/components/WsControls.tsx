@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ interface WsControlsProps {
   onKline: (kline: WsKlineData) => void;
   onStats?: (connections: number | null) => void;
   ensureSessionRunning?: () => Promise<void>;
+  disabled?: boolean;
 }
 
 export function WsControls({
@@ -25,6 +26,7 @@ export function WsControls({
   onKline,
   onStats,
   ensureSessionRunning,
+  disabled = false,
 }: WsControlsProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -35,6 +37,7 @@ export function WsControls({
     disconnectRef.current?.();
     disconnectRef.current = undefined;
     setConnected(false);
+    setConnections(null);
   }, []);
 
   const handleMessage = useCallback(
@@ -56,6 +59,12 @@ export function WsControls({
       return;
     }
 
+    const trimmedStreams = streams.trim();
+    if (!trimmedStreams) {
+      toast.error("Ingresá un stream válido");
+      return;
+    }
+
     try {
       setIsConnecting(true);
       if (ensureSessionRunning) {
@@ -64,7 +73,7 @@ export function WsControls({
 
       disconnectRef.current = openWs({
         sessionId,
-        streams,
+        streams: trimmedStreams,
         onMessage: handleMessage,
         onError: (error) => {
           toast.error(error.message);
@@ -76,6 +85,8 @@ export function WsControls({
         },
         onClose: () => {
           setConnected(false);
+          setConnections(null);
+          disconnectRef.current = undefined;
         },
       });
     } catch (error) {
@@ -87,6 +98,19 @@ export function WsControls({
       setIsConnecting(false);
     }
   }, [connected, ensureSessionRunning, handleDisconnect, handleMessage, sessionId, streams]);
+
+  useEffect(() => {
+    if (!disabled) {
+      return;
+    }
+    if (!connected) {
+      return;
+    }
+    handleDisconnect();
+  }, [connected, disabled, handleDisconnect]);
+
+  const isToggleDisabled =
+    isConnecting || (!connected && (disabled || !streams.trim()));
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4">
@@ -103,9 +127,10 @@ export function WsControls({
         value={streams}
         onChange={(event) => onStreamsChange(event.target.value)}
         placeholder="kline@1m:BTCUSDT"
+        disabled={disabled}
       />
       <div className="flex items-center gap-2">
-        <Button onClick={handleToggle} disabled={isConnecting}>
+        <Button onClick={handleToggle} disabled={isToggleDisabled}>
           {connected ? "Desconectar" : isConnecting ? "Conectando..." : "Conectar stream"}
         </Button>
       </div>
