@@ -14,6 +14,8 @@ export interface WsStatsData {
   connections: number;
 }
 
-export type WsMessage =
-  | { type: "kline"; data: WsKlineData }
-  | { type: "stats"; data: WsStatsData };
+export type WsEventType = "kline" | "stats";
+
+export type WsMessageEnvelope =
+  | { event: "kline"; data: WsKlineData }
+  | { event: "stats"; data: WsStatsData };
