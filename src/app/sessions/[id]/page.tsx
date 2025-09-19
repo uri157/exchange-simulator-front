@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams, useParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -24,13 +24,13 @@ import type { WsKlineData } from "@/lib/types";
 const MAX_ROWS = 200;
 
 export default function SessionDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id as string;
+  const params = useParams<{ id?: string }>();
+  const id = typeof params?.id === "string" ? params.id : "";
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const sessionQuery = useSession(id ?? null);
+  const sessionQuery = useSession(id ? id : null);
   const startSession = useSessionStart();
   const pauseSession = useSessionPause();
   const resumeSession = useSessionResume();
@@ -56,6 +56,7 @@ export default function SessionDetailPage() {
 
   const [streams, setStreams] = useState<string>(searchParams.get("streams") ?? "");
   const [wsRows, setWsRows] = useState<WsKlineData[]>([]);
+  const [receivedCount, setReceivedCount] = useState(0);
   const [seekValue, setSeekValue] = useState<string>("");
   const startPromiseRef = useRef<Promise<void> | null>(null);
 
@@ -88,6 +89,7 @@ export default function SessionDetailPage() {
 
   useEffect(() => {
     setWsRows([]);
+    setReceivedCount(0);
   }, [streams]);
 
   const handleStart = async () => {
@@ -105,7 +107,7 @@ export default function SessionDetailPage() {
     try {
       await pauseSessionMutateAsync(session.id);
       toast.success("Sesión pausada");
-      refetchSession();
+      await refetchSession();
     } catch (error) {
       toast.error(getMessage(error));
     }
@@ -116,7 +118,7 @@ export default function SessionDetailPage() {
     try {
       await resumeSessionMutateAsync(session.id);
       toast.success("Sesión reanudada");
-      refetchSession();
+      await refetchSession();
     } catch (error) {
       toast.error(getMessage(error));
     }
@@ -139,6 +141,7 @@ export default function SessionDetailPage() {
     try {
       await seekSessionMutateAsync({ id: session.id, timestamp });
       toast.success("Seek enviado");
+      await refetchSession();
     } catch (error) {
       toast.error(getMessage(error));
     }
@@ -176,14 +179,15 @@ export default function SessionDetailPage() {
     await startSessionOnce(session);
   }, [session, startSessionOnce]);
 
-  const handleKline = (kline: WsKlineData) => {
+  const handleKline = useCallback((kline: WsKlineData) => {
+    setReceivedCount((prev) => prev + 1);
     setWsRows((prev) => {
       const map = new Map(prev.map((row) => [row.closeTime, row] as const));
       map.set(kline.closeTime, kline);
       const next = Array.from(map.values()).sort((a, b) => b.closeTime - a.closeTime);
       return next.slice(0, MAX_ROWS);
     });
-  };
+  }, []);
 
   const columns = useMemo<DataTableColumn<WsKlineData>[]>(
     () => [
@@ -274,11 +278,19 @@ export default function SessionDetailPage() {
           onKline={handleKline}
           ensureSessionRunning={ensureSessionRunning}
           disabled={isSessionCompleted}
+          onConnectionChange={(status) => {
+            if (!status) {
+              setReceivedCount(0);
+            }
+          }}
         />
         <div className="rounded-lg border p-4">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-base font-semibold">Últimas velas</h3>
-            <Badge variant="secondary">{wsRows.length} recibidas</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{receivedCount} recibidas</Badge>
+              <Badge variant="outline">{wsRows.length} en tabla</Badge>
+            </div>
           </div>
           <DataTable
             data={wsRows}
