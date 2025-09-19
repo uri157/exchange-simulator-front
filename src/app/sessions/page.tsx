@@ -10,7 +10,7 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import type { SessionResponse } from "@/lib/api-types";
+import type { SessionResponse, SessionStatus } from "@/lib/api-types";
 import {
   useCreateSession,
   useDatasetIntervals,
@@ -161,7 +161,11 @@ export default function SessionsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={isStartingSession}
+              disabled={
+                isStartingSession ||
+                isSessionRunningStatus(row.status) ||
+                isSessionCompletedStatus(row.status)
+              }
               onClick={async () => {
                 try {
                   await startSessionMutateAsync(row.id);
@@ -176,7 +180,11 @@ export default function SessionsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={isPausingSession}
+              disabled={
+                isPausingSession ||
+                !isSessionRunningStatus(row.status) ||
+                isSessionCompletedStatus(row.status)
+              }
               onClick={async () => {
                 try {
                   await pauseSessionMutateAsync(row.id);
@@ -191,7 +199,11 @@ export default function SessionsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={isResumingSession}
+              disabled={
+                isResumingSession ||
+                !isSessionPausedStatus(row.status) ||
+                isSessionCompletedStatus(row.status)
+              }
               onClick={async () => {
                 try {
                   await resumeSessionMutateAsync(row.id);
@@ -513,4 +525,19 @@ function parseDatetimeLocal(value: string) {
   if (!value) return Number.NaN;
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? Number.NaN : timestamp;
+}
+
+function isSessionRunningStatus(status: SessionStatus | string) {
+  return status.toLowerCase() === "running";
+}
+
+function isSessionPausedStatus(status: SessionStatus | string) {
+  return status.toLowerCase() === "paused";
+}
+
+function isSessionCompletedStatus(status: SessionStatus | string) {
+  const normalized = status.toLowerCase();
+  return (
+    normalized === "completed" || normalized === "ended" || normalized === "failed"
+  );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Usable } from "react";
 import { usePathname, useRouter, useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -10,7 +11,7 @@ import { WsControls } from "@/components/WsControls";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import type { SessionResponse } from "@/lib/api-types";
+import type { SessionResponse, SessionStatus } from "@/lib/api-types";
 import {
   useSession,
   useSessionPause,
@@ -24,69 +25,111 @@ import type { WsKlineData } from "@/lib/types";
 const MAX_ROWS = 200;
 
 export default function SessionDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const { id } = use(params as unknown as Usable<{ id: string }>);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const sessionQuery = useSession(id);
+  const sessionQuery = useSession(id ?? null);
   const startSession = useSessionStart();
   const pauseSession = useSessionPause();
   const resumeSession = useSessionResume();
   const seekSession = useSessionSeek();
+  const refetchSession = sessionQuery.refetch;
+
+  const {
+    mutateAsync: startSessionMutateAsync,
+    isPending: isStartingSession,
+  } = startSession;
+  const {
+    mutateAsync: pauseSessionMutateAsync,
+    isPending: isPausingSession,
+  } = pauseSession;
+  const {
+    mutateAsync: resumeSessionMutateAsync,
+    isPending: isResumingSession,
+  } = resumeSession;
+  const {
+    mutateAsync: seekSessionMutateAsync,
+    isPending: isSeekingSession,
+  } = seekSession;
 
   const [streams, setStreams] = useState<string>(searchParams.get("streams") ?? "");
   const [wsRows, setWsRows] = useState<WsKlineData[]>([]);
   const [seekValue, setSeekValue] = useState<string>("");
+  const startPromiseRef = useRef<Promise<unknown> | null>(null);
 
   useEffect(() => {
-    const nextStreams = searchParams.get("streams");
-    if (nextStreams) setStreams(nextStreams);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const nextStreams = searchParams.get("streams") ?? "";
+    setStreams((prev) => (prev === nextStreams ? prev : nextStreams));
+  }, [searchParams]);
+
+  const updateQuery = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (value) next.set("streams", value);
+      else next.delete("streams");
+      const queryString = next.toString();
+      router.replace(queryString ? `${pathname}?${queryString}` : pathname);
+    },
+    [pathname, router, searchParams]
+  );
+
+  const session = sessionQuery.data ?? null;
 
   useEffect(() => {
-    if (sessionQuery.data && !streams) {
-      const defaultStream = buildDefaultStream(sessionQuery.data);
-      setStreams(defaultStream);
-      updateQuery(defaultStream);
+    if (!session) {
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionQuery.data?.id]);
+    if (streams) {
+      return;
+    }
+    const defaultStream = buildDefaultStream(session);
+    if (!defaultStream) {
+      return;
+    }
+    setStreams(defaultStream);
+    updateQuery(defaultStream);
+  }, [session, streams, updateQuery]);
 
-  const updateQuery = (value: string) => {
-    const next = new URLSearchParams(searchParams.toString());
-    if (value) next.set("streams", value);
-    else next.delete("streams");
-    const queryString = next.toString();
-    router.replace(queryString ? `${pathname}?${queryString}` : pathname);
-  };
+  useEffect(() => {
+    setWsRows([]);
+  }, [streams]);
 
   const handleStart = async () => {
+    if (!session) {
+      return;
+    }
     try {
-      await startSession.mutateAsync(id);
+      await startSessionOnce(session);
       toast.success("Sesión iniciada");
-      sessionQuery.refetch();
     } catch (error) {
       toast.error(getMessage(error));
     }
   };
 
   const handlePause = async () => {
+    if (!session || !isSessionRunningStatus(session.status)) {
+      return;
+    }
     try {
-      await pauseSession.mutateAsync(id);
+      await pauseSessionMutateAsync(session.id);
       toast.success("Sesión pausada");
-      sessionQuery.refetch();
+      refetchSession();
     } catch (error) {
       toast.error(getMessage(error));
     }
   };
 
   const handleResume = async () => {
+    if (!session || !isSessionPausedStatus(session.status)) {
+      return;
+    }
     try {
-      await resumeSession.mutateAsync(id);
+      await resumeSessionMutateAsync(session.id);
       toast.success("Sesión reanudada");
-      sessionQuery.refetch();
+      refetchSession();
     } catch (error) {
       toast.error(getMessage(error));
     }
@@ -97,18 +140,53 @@ export default function SessionDetailPage() {
       toast.error("Ingresá un timestamp");
       return;
     }
+    if (!session || isSessionCompletedStatus(session.status)) {
+      toast.error("La sesión no admite más movimientos");
+      return;
+    }
+    const timestamp = Number(seekValue);
+    if (Number.isNaN(timestamp)) {
+      toast.error("Timestamp inválido");
+      return;
+    }
     try {
-      await seekSession.mutateAsync({ id, timestamp: Number(seekValue) });
+      await seekSessionMutateAsync({ id: session.id, timestamp });
       toast.success("Seek enviado");
     } catch (error) {
       toast.error(getMessage(error));
     }
   };
 
-  const ensureSessionRunning = async () => {
-    if (sessionQuery.data?.status === "running") return;
-    await handleStart();
-  };
+  const startSessionOnce = useCallback(
+    async (current: SessionResponse) => {
+      if (isSessionCompletedStatus(current.status)) {
+        throw new Error("La sesión finalizó");
+      }
+      if (isSessionRunningStatus(current.status)) {
+        return;
+      }
+      if (startPromiseRef.current) {
+        return startPromiseRef.current;
+      }
+
+      const promise = startSessionMutateAsync(current.id)
+        .then(() => refetchSession())
+        .finally(() => {
+          startPromiseRef.current = null;
+        });
+
+      startPromiseRef.current = promise;
+      return promise;
+    },
+    [refetchSession, startSessionMutateAsync]
+  );
+
+  const ensureSessionRunning = useCallback(async () => {
+    if (!session) {
+      throw new Error("Sesión no encontrada");
+    }
+    return startSessionOnce(session);
+  }, [session, startSessionOnce]);
 
   const handleKline = (kline: WsKlineData) => {
     setWsRows((prev) => {
@@ -131,11 +209,13 @@ export default function SessionDetailPage() {
     []
   );
 
-  if (sessionQuery.isLoading || !sessionQuery.data) {
+  if (sessionQuery.isLoading || !session) {
     return <div className="h-64 animate-pulse rounded-md border bg-muted" />;
   }
 
-  const session = sessionQuery.data as SessionResponse;
+  const isSessionRunning = isSessionRunningStatus(session.status);
+  const isSessionPaused = isSessionPausedStatus(session.status);
+  const isSessionCompleted = isSessionCompletedStatus(session.status);
 
   return (
     <div className="space-y-6">
@@ -152,14 +232,25 @@ export default function SessionDetailPage() {
       <section className="rounded-lg border p-4">
         <h2 className="text-lg font-semibold">Controles</h2>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={handleStart} disabled={startSession.isPending}>
-            {startSession.isPending ? "Iniciando..." : "Start"}
+          <Button
+            onClick={handleStart}
+            disabled={
+              isStartingSession || isSessionCompleted || startPromiseRef.current !== null
+            }
+          >
+            {isStartingSession ? "Iniciando..." : "Start"}
           </Button>
-          <Button onClick={handlePause} disabled={pauseSession.isPending}>
-            {pauseSession.isPending ? "Pausando..." : "Pause"}
+          <Button
+            onClick={handlePause}
+            disabled={isPausingSession || !isSessionRunning || isSessionCompleted}
+          >
+            {isPausingSession ? "Pausando..." : "Pause"}
           </Button>
-          <Button onClick={handleResume} disabled={resumeSession.isPending}>
-            {resumeSession.isPending ? "Reanudando..." : "Resume"}
+          <Button
+            onClick={handleResume}
+            disabled={isResumingSession || !isSessionPaused || isSessionCompleted}
+          >
+            {isResumingSession ? "Reanudando..." : "Resume"}
           </Button>
           <div className="flex items-center gap-2">
             <Input
@@ -167,8 +258,8 @@ export default function SessionDetailPage() {
               value={seekValue}
               onChange={(event) => setSeekValue(event.target.value)}
             />
-            <Button onClick={handleSeek} disabled={seekSession.isPending}>
-              {seekSession.isPending ? "Buscando..." : "Seek"}
+            <Button onClick={handleSeek} disabled={isSeekingSession || isSessionCompleted}>
+              {isSeekingSession ? "Buscando..." : "Seek"}
             </Button>
           </div>
         </div>
@@ -176,6 +267,11 @@ export default function SessionDetailPage() {
           Inicio: {formatDateTime(session.startTime)} · Fin: {formatDateTime(session.endTime)} ·
           Speed: {session.speed} · Seed: {session.seed}
         </div>
+        {isSessionCompleted ? (
+          <p className="mt-2 text-sm text-destructive">
+            La sesión finalizó. No se recibirán más velas.
+          </p>
+        ) : null}
       </section>
 
       <section className="space-y-4">
@@ -189,6 +285,7 @@ export default function SessionDetailPage() {
           }}
           onKline={handleKline}
           ensureSessionRunning={ensureSessionRunning}
+          disabled={isSessionCompleted}
         />
         <div className="rounded-lg border p-4">
           <div className="mb-2 flex items-center justify-between">
@@ -221,4 +318,19 @@ function buildDefaultStream(session: SessionResponse) {
 
 function getMessage(error: unknown) {
   return error instanceof Error ? error.message : "Ocurrió un error";
+}
+
+function isSessionRunningStatus(status: SessionStatus | string) {
+  return status.toLowerCase() === "running";
+}
+
+function isSessionPausedStatus(status: SessionStatus | string) {
+  return status.toLowerCase() === "paused";
+}
+
+function isSessionCompletedStatus(status: SessionStatus | string) {
+  const normalized = status.toLowerCase();
+  return (
+    normalized === "completed" || normalized === "ended" || normalized === "failed"
+  );
 }
