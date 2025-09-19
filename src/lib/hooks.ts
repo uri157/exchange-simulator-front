@@ -4,21 +4,20 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
-import type {
-  CreateDatasetRequest,
-  SessionRequest,
-  Interval,
-  AvailableRange,
-} from "@/lib/api-types";
+import type { CreateDatasetRequest, SessionRequest } from "@/lib/api-types";
 import {
   createDataset,
   createSession,
   getBinanceSymbols,
   getBinanceIntervals,
   getAvailableRange,
+  getDatasetIntervals,
+  getDatasetRange,
+  getDatasetSymbols,
   getKlines,
   getSession,
   getSessionsAccount,
@@ -31,16 +30,51 @@ import {
   startSession,
   type FetchKlinesParams,
   type RestKline,
-  type SymbolInfo,
 } from "@/lib/api";
+
+function invalidateDatasetDependentQueries(
+  queryClient: QueryClient,
+  options?: { skipDatasets?: boolean }
+) {
+  if (!options?.skipDatasets) {
+    queryClient.invalidateQueries({ queryKey: ["datasets"] });
+  }
+
+  queryClient.invalidateQueries({ queryKey: ["dataset", "symbols"] });
+  queryClient.invalidateQueries({
+    predicate: (query) =>
+      Array.isArray(query.queryKey) &&
+      query.queryKey[0] === "dataset" &&
+      query.queryKey[1] === "intervals",
+  });
+  queryClient.invalidateQueries({
+    predicate: (query) =>
+      Array.isArray(query.queryKey) &&
+      query.queryKey[0] === "dataset" &&
+      query.queryKey[1] === "range",
+  });
+}
 
 // --- Datasets ---
 
 export function useDatasets() {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const queryResult = useQuery({
     queryKey: ["datasets"],
     queryFn: listDatasets,
   });
+
+  const originalRefetch = queryResult.refetch;
+  const refetch = useCallback<typeof originalRefetch>(
+    async (options) => {
+      const result = await originalRefetch(options);
+      invalidateDatasetDependentQueries(queryClient, { skipDatasets: true });
+      return result;
+    },
+    [originalRefetch, queryClient]
+  );
+
+  return { ...queryResult, refetch };
 }
 
 export function useCreateDataset() {
@@ -48,7 +82,7 @@ export function useCreateDataset() {
   return useMutation({
     mutationFn: (payload: CreateDatasetRequest) => createDataset(payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      invalidateDatasetDependentQueries(queryClient);
     },
   });
 }
@@ -58,8 +92,32 @@ export function useIngestDataset() {
   return useMutation({
     mutationFn: (id: string) => ingestDataset(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      invalidateDatasetDependentQueries(queryClient);
     },
+  });
+}
+
+export function useDatasetSymbols() {
+  return useQuery({
+    queryKey: ["dataset", "symbols"],
+    queryFn: getDatasetSymbols,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useDatasetIntervals(symbol: string | null) {
+  return useQuery({
+    queryKey: ["dataset", "intervals", symbol],
+    queryFn: () => getDatasetIntervals(symbol as string),
+    enabled: Boolean(symbol),
+  });
+}
+
+export function useDatasetRange(symbol?: string, interval?: string) {
+  return useQuery({
+    queryKey: ["dataset", "range", symbol, interval],
+    queryFn: () => getDatasetRange(symbol as string, interval as string),
+    enabled: Boolean(symbol && interval),
   });
 }
 

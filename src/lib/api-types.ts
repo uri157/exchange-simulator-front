@@ -1,4 +1,3 @@
-/* eslint-disable */
 // Temporary handcrafted types mirroring the OpenAPI schema for the exchange-simulator backend.
 // Replace by running `pnpm generate:api-types` once the backend swagger is reachable.
 
