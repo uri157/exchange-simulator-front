@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import type { CreateDatasetRequest, SessionRequest } from "@/lib/api-types";
 import {
@@ -40,19 +40,9 @@ function invalidateDatasetDependentQueries(
     queryClient.invalidateQueries({ queryKey: ["datasets"] });
   }
 
-  queryClient.invalidateQueries({ queryKey: ["dataset", "symbols"] });
-  queryClient.invalidateQueries({
-    predicate: (query) =>
-      Array.isArray(query.queryKey) &&
-      query.queryKey[0] === "dataset" &&
-      query.queryKey[1] === "intervals",
-  });
-  queryClient.invalidateQueries({
-    predicate: (query) =>
-      Array.isArray(query.queryKey) &&
-      query.queryKey[0] === "dataset" &&
-      query.queryKey[1] === "range",
-  });
+  queryClient.invalidateQueries({ queryKey: ["dataset-symbols"] });
+  queryClient.invalidateQueries({ queryKey: ["dataset-intervals"] });
+  queryClient.invalidateQueries({ queryKey: ["dataset-range"] });
 }
 
 // --- Datasets ---
@@ -63,6 +53,71 @@ export function useDatasets() {
     queryKey: ["datasets"],
     queryFn: listDatasets,
   });
+
+  const readyDatasetsRef = useRef<Set<string>>(new Set());
+  const hasTrackedReadyRef = useRef(false);
+
+  useEffect(() => {
+    const datasets = queryResult.data;
+    if (!datasets) {
+      return;
+    }
+
+    const nextReady = new Set<string>();
+    for (const dataset of datasets) {
+      if (dataset.status === "ready") {
+        nextReady.add(`${dataset.symbol}::${dataset.interval}`);
+      }
+    }
+
+    const prevReady = readyDatasetsRef.current;
+    const hasTrackedReady = hasTrackedReadyRef.current;
+
+    let hasChanges = !hasTrackedReady || prevReady.size !== nextReady.size;
+    if (!hasChanges) {
+      for (const key of nextReady) {
+        if (!prevReady.has(key)) {
+          hasChanges = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasChanges) {
+      return;
+    }
+
+    readyDatasetsRef.current = nextReady;
+    hasTrackedReadyRef.current = true;
+
+    queryClient.invalidateQueries({ queryKey: ["dataset-symbols"] });
+
+    const affectedSymbols = new Set<string>();
+    const affectedRanges = new Set<string>();
+
+    for (const key of prevReady) {
+      const [symbol, interval] = key.split("::");
+      affectedSymbols.add(symbol);
+      affectedRanges.add(`${symbol}::${interval}`);
+    }
+
+    for (const key of nextReady) {
+      const [symbol, interval] = key.split("::");
+      affectedSymbols.add(symbol);
+      affectedRanges.add(`${symbol}::${interval}`);
+    }
+
+    for (const symbol of affectedSymbols) {
+      queryClient.invalidateQueries({ queryKey: ["dataset-intervals", symbol] });
+    }
+
+    for (const key of affectedRanges) {
+      const [symbol, interval] = key.split("::");
+      queryClient.invalidateQueries({
+        queryKey: ["dataset-range", symbol, interval],
+      });
+    }
+  }, [queryClient, queryResult.data]);
 
   const originalRefetch = queryResult.refetch;
   const refetch = useCallback<typeof originalRefetch>(
@@ -99,7 +154,7 @@ export function useIngestDataset() {
 
 export function useDatasetSymbols() {
   return useQuery({
-    queryKey: ["dataset", "symbols"],
+    queryKey: ["dataset-symbols"],
     queryFn: getDatasetSymbols,
     staleTime: 5 * 60_000,
   });
@@ -107,15 +162,15 @@ export function useDatasetSymbols() {
 
 export function useDatasetIntervals(symbol: string | null) {
   return useQuery({
-    queryKey: ["dataset", "intervals", symbol],
+    queryKey: ["dataset-intervals", symbol],
     queryFn: () => getDatasetIntervals(symbol as string),
     enabled: Boolean(symbol),
   });
 }
 
-export function useDatasetRange(symbol?: string, interval?: string) {
+export function useDatasetRange(symbol: string | null, interval: string | null) {
   return useQuery({
-    queryKey: ["dataset", "range", symbol, interval],
+    queryKey: ["dataset-range", symbol, interval],
     queryFn: () => getDatasetRange(symbol as string, interval as string),
     enabled: Boolean(symbol && interval),
   });
