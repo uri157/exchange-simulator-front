@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { ComboBox } from "@/components/ComboBox";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import type { SessionResponse } from "@/lib/api-types";
 import {
   useCreateSession,
-  useExchangeInfo,
+  useDatasetIntervals,
+  useDatasetRange,
+  useDatasetSymbols,
   useSessionPause,
   useSessionResume,
   useSessionStart,
@@ -20,21 +23,26 @@ import {
 } from "@/lib/hooks";
 import { formatDateTime } from "@/lib/time";
 
-const sessionSchema = z.object({
-  symbols: z.string().min(1),
-  interval: z.string().min(1),
-  startTime: z.coerce.number().int(),
-  endTime: z.coerce.number().int(),
-  speed: z.coerce.number().positive(),
-  seed: z.coerce.number().int(),
-});
+const sessionSchema = z
+  .object({
+    symbol: z.string().min(1, "Seleccioná un símbolo"),
+    interval: z.string().min(1, "Seleccioná un intervalo"),
+    startTime: z.number().int(),
+    endTime: z.number().int(),
+    speed: z.coerce.number().positive("La velocidad debe ser mayor a 0"),
+    seed: z.coerce.number().int("Seed inválida"),
+  })
+  .refine((value) => value.endTime > value.startTime, {
+    message: "El fin debe ser mayor al inicio",
+    path: ["endTime"],
+  });
 
 export default function SessionsPage() {
   const [formState, setFormState] = useState({
-    symbols: "BTCUSDT",
-    interval: "1m",
-    startTime: "1514764800000",
-    endTime: "1609459199000",
+    symbol: "",
+    interval: "",
+    startTime: "",
+    endTime: "",
     speed: "1",
     seed: "123",
   });
@@ -45,7 +53,90 @@ export default function SessionsPage() {
   const startSession = useSessionStart();
   const pauseSession = useSessionPause();
   const resumeSession = useSessionResume();
-  const exchangeInfo = useExchangeInfo();
+  const datasetSymbolsQuery = useDatasetSymbols();
+  const datasetIntervalsQuery = useDatasetIntervals(
+    formState.symbol || null
+  );
+  const datasetRangeQuery = useDatasetRange(
+    formState.symbol || undefined,
+    formState.interval || undefined
+  );
+  const range = datasetRangeQuery.data ?? null;
+
+  const clearErrors = useCallback((...keys: string[]) => {
+    if (keys.length === 0) return;
+    setErrors((prev) => {
+      if (keys.every((key) => !(key in prev))) {
+        return prev;
+      }
+      const next = { ...prev };
+      for (const key of keys) {
+        delete next[key];
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!range) {
+      return;
+    }
+
+    clearErrors("range", "startTime", "endTime");
+
+    const defaultStart = toDatetimeLocal(range.firstOpenTime);
+    const defaultEnd = toDatetimeLocal(range.lastCloseTime);
+
+    setFormState((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      const startMs = parseDatetimeLocal(prev.startTime);
+      if (
+        !prev.startTime ||
+        Number.isNaN(startMs) ||
+        startMs < range.firstOpenTime ||
+        startMs > range.lastCloseTime
+      ) {
+        next.startTime = defaultStart;
+        changed = true;
+      }
+
+      const endMs = parseDatetimeLocal(prev.endTime);
+      if (
+        !prev.endTime ||
+        Number.isNaN(endMs) ||
+        endMs > range.lastCloseTime ||
+        endMs < range.firstOpenTime
+      ) {
+        next.endTime = defaultEnd;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [range, clearErrors]);
+
+  const minDate = range ? toDatetimeLocal(range.firstOpenTime) : "";
+  const maxDate = range ? toDatetimeLocal(range.lastCloseTime) : "";
+  const isSubmitDisabled =
+    createSession.isPending ||
+    !formState.symbol ||
+    !formState.interval ||
+    !range;
+
+  const {
+    mutateAsync: startSessionMutateAsync,
+    isPending: isStartingSession,
+  } = startSession;
+  const {
+    mutateAsync: pauseSessionMutateAsync,
+    isPending: isPausingSession,
+  } = pauseSession;
+  const {
+    mutateAsync: resumeSessionMutateAsync,
+    isPending: isResumingSession,
+  } = resumeSession;
 
   const columns = useMemo<DataTableColumn<SessionResponse>[]>(
     () => [
@@ -70,10 +161,10 @@ export default function SessionsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={startSession.isPending}
+              disabled={isStartingSession}
               onClick={async () => {
                 try {
-                  await startSession.mutateAsync(row.id);
+                  await startSessionMutateAsync(row.id);
                   toast.success("Sesión iniciada");
                 } catch (error) {
                   toast.error(getMessage(error));
@@ -85,10 +176,10 @@ export default function SessionsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={pauseSession.isPending}
+              disabled={isPausingSession}
               onClick={async () => {
                 try {
-                  await pauseSession.mutateAsync(row.id);
+                  await pauseSessionMutateAsync(row.id);
                   toast.success("Sesión pausada");
                 } catch (error) {
                   toast.error(getMessage(error));
@@ -100,10 +191,10 @@ export default function SessionsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={resumeSession.isPending}
+              disabled={isResumingSession}
               onClick={async () => {
                 try {
-                  await resumeSession.mutateAsync(row.id);
+                  await resumeSessionMutateAsync(row.id);
                   toast.success("Sesión reanudada");
                 } catch (error) {
                   toast.error(getMessage(error));
@@ -119,12 +210,28 @@ export default function SessionsPage() {
         ),
       },
     ],
-    [pauseSession.isPending, resumeSession.isPending, startSession.isPending]
+    [
+      isPausingSession,
+      pauseSessionMutateAsync,
+      isResumingSession,
+      resumeSessionMutateAsync,
+      isStartingSession,
+      startSessionMutateAsync,
+    ]
   );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = sessionSchema.safeParse(formState);
+
+    const result = sessionSchema.safeParse({
+      symbol: formState.symbol,
+      interval: formState.interval,
+      startTime: parseDatetimeLocal(formState.startTime),
+      endTime: parseDatetimeLocal(formState.endTime),
+      speed: formState.speed,
+      seed: formState.seed,
+    });
+
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       for (const issue of result.error.issues) {
@@ -136,20 +243,40 @@ export default function SessionsPage() {
       return;
     }
 
+    const validationErrors: Record<string, string> = {};
+    if (!range) {
+      validationErrors.range =
+        "Seleccioná un símbolo e intervalo con datos disponibles";
+    } else {
+      const { firstOpenTime, lastCloseTime } = range;
+      if (
+        result.data.startTime < firstOpenTime ||
+        result.data.startTime > lastCloseTime
+      ) {
+        validationErrors.startTime = "Fuera del rango disponible";
+      }
+      if (
+        result.data.endTime < firstOpenTime ||
+        result.data.endTime > lastCloseTime
+      ) {
+        validationErrors.endTime = "Fuera del rango disponible";
+      }
+    }
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
     setErrors({});
     const payload = {
-      symbols: result.data.symbols.split(",").map((item) => item.trim()).filter(Boolean),
+      symbols: [result.data.symbol],
       interval: result.data.interval,
       startTime: result.data.startTime,
       endTime: result.data.endTime,
       speed: result.data.speed,
       seed: result.data.seed,
     } as const;
-
-    if (payload.symbols.length === 0) {
-      setErrors({ symbols: "Ingresá al menos un símbolo" });
-      return;
-    }
 
     try {
       await createSession.mutateAsync(payload);
@@ -172,34 +299,69 @@ export default function SessionsPage() {
         <h2 className="text-lg font-semibold">Crear sesión</h2>
         <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-medium" htmlFor="symbols">
-              Símbolos (separados por coma)
+            <label className="text-sm font-medium" htmlFor="symbol">
+              Símbolo
             </label>
-            <Input
-              id="symbols"
-              value={formState.symbols}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, symbols: event.target.value }))
+            <ComboBox
+              options={(datasetSymbolsQuery.data ?? []).map((item) => ({
+                label: item.symbol,
+                value: item.symbol,
+              }))}
+              value={formState.symbol || null}
+              onChange={(value) => {
+                setFormState((prev) => ({
+                  ...prev,
+                  symbol: value,
+                  interval: "",
+                  startTime: "",
+                  endTime: "",
+                }));
+                clearErrors("symbol", "interval", "startTime", "endTime", "range");
+              }}
+              placeholder="Seleccioná un símbolo"
+              inputPlaceholder="Buscar símbolo"
+              emptyMessage={
+                datasetSymbolsQuery.isLoading
+                  ? "Cargando..."
+                  : "No hay símbolos disponibles"
               }
+              disabled={datasetSymbolsQuery.isLoading}
             />
-            {errors.symbols ? (
-              <p className="text-xs text-destructive">{errors.symbols}</p>
+            {errors.symbol ? (
+              <p className="text-xs text-destructive">{errors.symbol}</p>
             ) : null}
-            <p className="text-xs text-muted-foreground">
-              Disponibles: {exchangeInfo.data?.symbols.filter((s) => s.active).slice(0, 10).map((s) => s.symbol).join(", ") ?? "—"}
-            </p>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="interval">
               Intervalo
             </label>
-            <Input
-              id="interval"
-              value={formState.interval}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, interval: event.target.value }))
+            <ComboBox
+              options={(datasetIntervalsQuery.data ?? []).map((item) => ({
+                label: item.interval,
+                value: item.interval,
+              }))}
+              value={formState.interval || null}
+              onChange={(value) => {
+                setFormState((prev) => ({
+                  ...prev,
+                  interval: value,
+                  startTime: "",
+                  endTime: "",
+                }));
+                clearErrors("interval", "startTime", "endTime", "range");
+              }}
+              placeholder={
+                formState.symbol
+                  ? "Seleccioná un intervalo"
+                  : "Elegí un símbolo primero"
               }
+              emptyMessage={
+                datasetIntervalsQuery.isLoading
+                  ? "Cargando..."
+                  : "No hay intervalos disponibles"
+              }
+              disabled={!formState.symbol || datasetIntervalsQuery.isLoading}
             />
             {errors.interval ? (
               <p className="text-xs text-destructive">{errors.interval}</p>
@@ -208,14 +370,22 @@ export default function SessionsPage() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="startTime">
-              Inicio (epoch ms)
+              Inicio
             </label>
             <Input
               id="startTime"
+              type="datetime-local"
+              min={minDate || undefined}
+              max={maxDate || undefined}
               value={formState.startTime}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, startTime: event.target.value }))
-              }
+              onChange={(event) => {
+                setFormState((prev) => ({
+                  ...prev,
+                  startTime: event.target.value,
+                }));
+                clearErrors("startTime", "range");
+              }}
+              disabled={!range}
             />
             {errors.startTime ? (
               <p className="text-xs text-destructive">{errors.startTime}</p>
@@ -224,17 +394,45 @@ export default function SessionsPage() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="endTime">
-              Fin (epoch ms)
+              Fin
             </label>
             <Input
               id="endTime"
+              type="datetime-local"
+              min={minDate || undefined}
+              max={maxDate || undefined}
               value={formState.endTime}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, endTime: event.target.value }))
-              }
+              onChange={(event) => {
+                setFormState((prev) => ({
+                  ...prev,
+                  endTime: event.target.value,
+                }));
+                clearErrors("endTime", "range");
+              }}
+              disabled={!range}
             />
             {errors.endTime ? (
               <p className="text-xs text-destructive">{errors.endTime}</p>
+            ) : null}
+          </div>
+
+          <div className="md:col-span-2 space-y-1 text-xs">
+            {datasetRangeQuery.isLoading && formState.symbol && formState.interval ? (
+              <p className="text-muted-foreground">Obteniendo rango disponible…</p>
+            ) : null}
+            {range ? (
+              <p className="text-muted-foreground">
+                Rango disponible: {formatDateTime(range.firstOpenTime)} – {" "}
+                {formatDateTime(range.lastCloseTime)}
+              </p>
+            ) : null}
+            {datasetRangeQuery.error ? (
+              <p className="text-destructive">
+                {getMessage(datasetRangeQuery.error)}
+              </p>
+            ) : null}
+            {errors.range ? (
+              <p className="text-destructive">{errors.range}</p>
             ) : null}
           </div>
 
@@ -245,9 +443,10 @@ export default function SessionsPage() {
             <Input
               id="speed"
               value={formState.speed}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, speed: event.target.value }))
-              }
+              onChange={(event) => {
+                setFormState((prev) => ({ ...prev, speed: event.target.value }));
+                clearErrors("speed");
+              }}
             />
             {errors.speed ? (
               <p className="text-xs text-destructive">{errors.speed}</p>
@@ -261,9 +460,10 @@ export default function SessionsPage() {
             <Input
               id="seed"
               value={formState.seed}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, seed: event.target.value }))
-              }
+              onChange={(event) => {
+                setFormState((prev) => ({ ...prev, seed: event.target.value }));
+                clearErrors("seed");
+              }}
             />
             {errors.seed ? (
               <p className="text-xs text-destructive">{errors.seed}</p>
@@ -271,7 +471,7 @@ export default function SessionsPage() {
           </div>
 
           <div className="md:col-span-2">
-            <Button type="submit" disabled={createSession.isPending}>
+            <Button type="submit" disabled={isSubmitDisabled}>
               {createSession.isPending ? "Creando..." : "Crear sesión"}
             </Button>
           </div>
@@ -303,4 +503,14 @@ export default function SessionsPage() {
 
 function getMessage(error: unknown) {
   return error instanceof Error ? error.message : "Ocurrió un error";
+}
+
+function toDatetimeLocal(value: number) {
+  return new Date(value).toISOString().slice(0, 16);
+}
+
+function parseDatetimeLocal(value: string) {
+  if (!value) return Number.NaN;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? Number.NaN : timestamp;
 }

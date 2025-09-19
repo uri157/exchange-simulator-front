@@ -39,7 +39,7 @@ export default function DatasetsPage() {
   const [formState, setFormState] = useState<{
     symbol: string; interval: Interval | ""; startLocal: string; endLocal: string;
   }>({
-    symbol: "", interval: "" as any, startLocal: "", endLocal: "",
+    symbol: "", interval: "", startLocal: "", endLocal: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -80,8 +80,12 @@ export default function DatasetsPage() {
             try {
               await ingestDataset.mutateAsync(row.id);
               toast.success(`Ingesta iniciada para ${row.symbol} ${row.interval}`);
-            } catch (e:any) {
-              toast.error(e?.message ?? "No se pudo iniciar la ingesta");
+            } catch (error) {
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : "No se pudo iniciar la ingesta";
+              toast.error(message);
             }
           }}
         >
@@ -114,9 +118,11 @@ export default function DatasetsPage() {
     try {
       await createDataset.mutateAsync(p.data);
       toast.success("Dataset creado");
-      setFormState({ symbol:"", interval: "" as any, startLocal:"", endLocal:"" });
-    } catch (e:any) {
-      toast.error(e?.message ?? "No se pudo crear el dataset");
+      setFormState({ symbol:"", interval: "", startLocal:"", endLocal:"" });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo crear el dataset";
+      toast.error(message);
     }
   };
 

@@ -120,6 +120,39 @@ export async function getKlines(params: FetchKlinesParams) {
 }
 
 /** ====== Datasets ====== */
+
+export type DatasetSymbol = { symbol: string };
+export type DatasetInterval = { interval: string };
+export type DatasetRange = {
+  firstOpenTime: number;
+  lastCloseTime: number;
+};
+
+export function getDatasetSymbols() {
+  return unwrap(
+    apiClient.get("api/v1/datasets/symbols").json<DatasetSymbol[]>()
+  );
+}
+
+export function getDatasetIntervals(symbol: string) {
+  const encodedSymbol = encodeURIComponent(symbol);
+  return unwrap(
+    apiClient
+      .get(`api/v1/datasets/${encodedSymbol}/intervals`)
+      .json<DatasetInterval[]>()
+  );
+}
+
+export function getDatasetRange(symbol: string, interval: string) {
+  const encodedSymbol = encodeURIComponent(symbol);
+  const encodedInterval = encodeURIComponent(interval);
+  return unwrap(
+    apiClient
+      .get(`api/v1/datasets/${encodedSymbol}/${encodedInterval}/range`)
+      .json<DatasetRange>()
+  );
+}
+
 export function listDatasets() {
   return unwrap(apiClient.get("api/v1/datasets").json<DatasetSummary[]>());
 }
