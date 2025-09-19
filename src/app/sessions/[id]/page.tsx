@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -23,12 +23,8 @@ import type { WsKlineData } from "@/lib/types";
 
 const MAX_ROWS = 200;
 
-type Props = {
-  params: { id: string };
-};
-
-export default function SessionDetailPage({ params }: Props) {
-  const { id } = params;
+export default function SessionDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -39,17 +35,13 @@ export default function SessionDetailPage({ params }: Props) {
   const resumeSession = useSessionResume();
   const seekSession = useSessionSeek();
 
-  const [streams, setStreams] = useState<string>(
-    searchParams.get("streams") ?? ""
-  );
+  const [streams, setStreams] = useState<string>(searchParams.get("streams") ?? "");
   const [wsRows, setWsRows] = useState<WsKlineData[]>([]);
   const [seekValue, setSeekValue] = useState<string>("");
 
   useEffect(() => {
     const nextStreams = searchParams.get("streams");
-    if (nextStreams) {
-      setStreams(nextStreams);
-    }
+    if (nextStreams) setStreams(nextStreams);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -64,11 +56,8 @@ export default function SessionDetailPage({ params }: Props) {
 
   const updateQuery = (value: string) => {
     const next = new URLSearchParams(searchParams.toString());
-    if (value) {
-      next.set("streams", value);
-    } else {
-      next.delete("streams");
-    }
+    if (value) next.set("streams", value);
+    else next.delete("streams");
     const queryString = next.toString();
     router.replace(queryString ? `${pathname}?${queryString}` : pathname);
   };
@@ -125,29 +114,19 @@ export default function SessionDetailPage({ params }: Props) {
     setWsRows((prev) => {
       const map = new Map(prev.map((row) => [row.closeTime, row] as const));
       map.set(kline.closeTime, kline);
-      const next = Array.from(map.values()).sort(
-        (a, b) => b.closeTime - a.closeTime
-      );
+      const next = Array.from(map.values()).sort((a, b) => b.closeTime - a.closeTime);
       return next.slice(0, MAX_ROWS);
     });
   };
 
   const columns = useMemo<DataTableColumn<WsKlineData>[]>(
     () => [
-      {
-        key: "closeTime",
-        header: "Close time",
-        render: (row) => formatDateTime(row.closeTime),
-      },
+      { key: "closeTime", header: "Close time", render: (row) => formatDateTime(row.closeTime) },
       { key: "open", header: "Open", render: (row) => formatNumber(row.open) },
       { key: "high", header: "High", render: (row) => formatNumber(row.high) },
       { key: "low", header: "Low", render: (row) => formatNumber(row.low) },
       { key: "close", header: "Close", render: (row) => formatNumber(row.close) },
-      {
-        key: "volume",
-        header: "Volume",
-        render: (row) => formatNumber(row.volume, 4),
-      },
+      { key: "volume", header: "Volume", render: (row) => formatNumber(row.volume, 4) },
     ],
     []
   );
@@ -194,8 +173,8 @@ export default function SessionDetailPage({ params }: Props) {
           </div>
         </div>
         <div className="mt-4 text-sm text-muted-foreground">
-          Inicio: {formatDateTime(session.startTime)} · Fin: {formatDateTime(session.endTime)} · Speed: {session.speed} · Seed: {" "}
-          {session.seed}
+          Inicio: {formatDateTime(session.startTime)} · Fin: {formatDateTime(session.endTime)} ·
+          Speed: {session.speed} · Seed: {session.seed}
         </div>
       </section>
 
