@@ -1,7 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Usable } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -11,7 +10,7 @@ import { WsControls } from "@/components/WsControls";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import type { SessionResponse, SessionStatus } from "@/lib/api-types";
+import type { SessionResponse } from "@/lib/api-types";
 import {
   useSession,
   useSessionPause,
@@ -26,7 +25,7 @@ const MAX_ROWS = 200;
 
 export default function SessionDetailPage() {
   const params = useParams<{ id: string }>();
-  const { id } = use(params as unknown as Usable<{ id: string }>);
+  const id = params?.id as string;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -58,7 +57,7 @@ export default function SessionDetailPage() {
   const [streams, setStreams] = useState<string>(searchParams.get("streams") ?? "");
   const [wsRows, setWsRows] = useState<WsKlineData[]>([]);
   const [seekValue, setSeekValue] = useState<string>("");
-  const startPromiseRef = useRef<Promise<unknown> | null>(null);
+  const startPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     const nextStreams = searchParams.get("streams") ?? "";
@@ -79,16 +78,10 @@ export default function SessionDetailPage() {
   const session = sessionQuery.data ?? null;
 
   useEffect(() => {
-    if (!session) {
-      return;
-    }
-    if (streams) {
-      return;
-    }
+    if (!session) return;
+    if (streams) return;
     const defaultStream = buildDefaultStream(session);
-    if (!defaultStream) {
-      return;
-    }
+    if (!defaultStream) return;
     setStreams(defaultStream);
     updateQuery(defaultStream);
   }, [session, streams, updateQuery]);
@@ -98,9 +91,7 @@ export default function SessionDetailPage() {
   }, [streams]);
 
   const handleStart = async () => {
-    if (!session) {
-      return;
-    }
+    if (!session) return;
     try {
       await startSessionOnce(session);
       toast.success("Sesión iniciada");
@@ -110,9 +101,7 @@ export default function SessionDetailPage() {
   };
 
   const handlePause = async () => {
-    if (!session || !isSessionRunningStatus(session.status)) {
-      return;
-    }
+    if (!session || session.status.toLowerCase() !== "running") return;
     try {
       await pauseSessionMutateAsync(session.id);
       toast.success("Sesión pausada");
@@ -123,9 +112,7 @@ export default function SessionDetailPage() {
   };
 
   const handleResume = async () => {
-    if (!session || !isSessionPausedStatus(session.status)) {
-      return;
-    }
+    if (!session || session.status.toLowerCase() !== "paused") return;
     try {
       await resumeSessionMutateAsync(session.id);
       toast.success("Sesión reanudada");
@@ -158,22 +145,23 @@ export default function SessionDetailPage() {
   };
 
   const startSessionOnce = useCallback(
-    async (current: SessionResponse) => {
+    async (current: SessionResponse): Promise<void> => {
       if (isSessionCompletedStatus(current.status)) {
         throw new Error("La sesión finalizó");
       }
-      if (isSessionRunningStatus(current.status)) {
+      if (current.status.toLowerCase() === "running") {
         return;
       }
       if (startPromiseRef.current) {
         return startPromiseRef.current;
       }
 
-      const promise = startSessionMutateAsync(current.id)
-        .then(() => refetchSession())
-        .finally(() => {
-          startPromiseRef.current = null;
-        });
+      const promise: Promise<void> = (async () => {
+        await startSessionMutateAsync(current.id);
+        await refetchSession();
+      })().finally(() => {
+        startPromiseRef.current = null;
+      });
 
       startPromiseRef.current = promise;
       return promise;
@@ -181,11 +169,11 @@ export default function SessionDetailPage() {
     [refetchSession, startSessionMutateAsync]
   );
 
-  const ensureSessionRunning = useCallback(async () => {
+  const ensureSessionRunning = useCallback(async (): Promise<void> => {
     if (!session) {
       throw new Error("Sesión no encontrada");
     }
-    return startSessionOnce(session);
+    await startSessionOnce(session);
   }, [session, startSessionOnce]);
 
   const handleKline = (kline: WsKlineData) => {
@@ -213,8 +201,8 @@ export default function SessionDetailPage() {
     return <div className="h-64 animate-pulse rounded-md border bg-muted" />;
   }
 
-  const isSessionRunning = isSessionRunningStatus(session.status);
-  const isSessionPaused = isSessionPausedStatus(session.status);
+  const isSessionRunning = session.status.toLowerCase() === "running";
+  const isSessionPaused = session.status.toLowerCase() === "paused";
   const isSessionCompleted = isSessionCompletedStatus(session.status);
 
   return (
@@ -320,17 +308,7 @@ function getMessage(error: unknown) {
   return error instanceof Error ? error.message : "Ocurrió un error";
 }
 
-function isSessionRunningStatus(status: SessionStatus | string) {
-  return status.toLowerCase() === "running";
-}
-
-function isSessionPausedStatus(status: SessionStatus | string) {
-  return status.toLowerCase() === "paused";
-}
-
-function isSessionCompletedStatus(status: SessionStatus | string) {
+function isSessionCompletedStatus(status: string) {
   const normalized = status.toLowerCase();
-  return (
-    normalized === "completed" || normalized === "ended" || normalized === "failed"
-  );
+  return normalized === "completed" || normalized === "ended" || normalized === "failed";
 }
