@@ -1,20 +1,55 @@
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+const DEFAULT_WS_PATH = "/ws";
 
-const CONFIGURED_WS_BASE =
-  process.env.NEXT_PUBLIC_WS_BASE ?? process.env.NEXT_PUBLIC_WS_URL ?? null;
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+export const WS_PATH = process.env.NEXT_PUBLIC_WS_PATH || DEFAULT_WS_PATH;
 
-export const WS_PATH = process.env.NEXT_PUBLIC_WS_PATH ?? "/api/v1/ws";
+function removeTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function resolveFromApiBase(): string | null {
+  const baseUrl = API_BASE_URL?.trim();
+  if (!baseUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(baseUrl);
+    const protocol = url.protocol === "https:" ? "wss" : "ws";
+    return removeTrailingSlash(`${protocol}://${url.host}`);
+  } catch {
+    return null;
+  }
+}
 
 export function resolveWsBase(): string {
-  if (CONFIGURED_WS_BASE) {
-    return CONFIGURED_WS_BASE.replace(/\/+$/, "");
+  const configured = process.env.NEXT_PUBLIC_WS_BASE_URL?.trim();
+  if (configured) {
+    return removeTrailingSlash(configured);
   }
 
   if (typeof window !== "undefined") {
+    const fromApi = resolveFromApiBase();
+    if (fromApi) {
+      return fromApi;
+    }
+
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    return `${protocol}://${window.location.host}`;
+    return removeTrailingSlash(`${protocol}://${window.location.host}`);
   }
 
-  return "ws://localhost:3001";
+  const fromApi = resolveFromApiBase();
+  return fromApi ?? "";
+}
+
+export function normalizePath(path: string): string {
+  const trimmed = path?.trim();
+  if (!trimmed) {
+    return DEFAULT_WS_PATH;
+  }
+
+  const withLeading = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const withoutTrailing = withLeading.replace(/\/+$/, "");
+
+  return withoutTrailing || DEFAULT_WS_PATH;
 }
