@@ -18,6 +18,7 @@ import {
   getDatasetIntervals,
   getDatasetRange,
   getDatasetSymbols,
+  getExchangeInfo,
   getKlines,
   getSession,
   getSessionsAccount,
@@ -205,6 +206,16 @@ export function useAvailableRange(symbol?: string, interval?: string) {
     queryFn: () => getAvailableRange(symbol as string, interval as string),
     enabled: Boolean(symbol && interval),
     staleTime: 1000 * 60,
+  });
+}
+
+// --- Exchange Info ---
+
+export function useExchangeInfo() {
+  return useQuery({
+    queryKey: ["exchange", "info"],
+    queryFn: getExchangeInfo,
+    staleTime: 1000 * 60 * 5,
   });
 }
 
