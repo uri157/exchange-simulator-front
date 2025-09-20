@@ -222,4 +222,17 @@ El front **no** corta la conexión si no hay datos (permite conexiones ociosas).
 
 
 
+g
+
+
+**Frontend**
+4\) `src/app/sessions/[id]/page.tsx` (o el contenedor de la vista de detalle)
+
+* Verificar que “Conectar stream” **no** dispara `start/resume/seek` automáticamente.
+* Si necesitás reposicionar, hacerlo **solo** si `status === "running"`; si está `paused/ended`, **no** hacer `seek` al conectar.
+
+5. (El componente del panel WS de detalle; p. ej. `src/components/sessions/SessionStreamPanel.tsx` o equivalente)
+
+   * Confirmar que el botón “Conectar stream” **solo** abre el WS.
+   * Manejar `onclose`: si `code === 1000` mostrar “cerrado” normal; si no, mostrar error y ofrecer “Reintentar” sin spamear reconexiones.
 
