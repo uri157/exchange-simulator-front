@@ -1,18 +1,10 @@
 "use client";
 
-import { resolveWsBase, WS_PATH } from "@/lib/env";
+import { normalizePath, resolveWsBase, WS_PATH } from "@/lib/env";
 import type { WsKlineData, WsMessageEnvelope, WsStatsData } from "@/lib/types";
 
 function normalizeBase(base: string): string {
   return base.endsWith("/") ? base.slice(0, -1) : base;
-}
-
-function normalizePath(path: string): string {
-  if (!path) {
-    return "/ws";
-  }
-  const normalized = (path.startsWith("/") ? path : `/${path}`).replace(/\/+$/, "");
-  return normalized || "/ws";
 }
 
 export interface WsRequestInfo {
@@ -30,7 +22,7 @@ export interface BuildWsRequestOptions {
 export function buildWsRequest({ sessionId, streams }: BuildWsRequestOptions): WsRequestInfo {
   const base = normalizeBase(resolveWsBase());
   const path = normalizePath(WS_PATH);
-  const query = new URLSearchParams({ session_id: sessionId, streams }).toString();
+  const query = new URLSearchParams({ sessionId, streams }).toString();
 
   return {
     base,

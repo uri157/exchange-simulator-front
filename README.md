@@ -16,6 +16,22 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+### Configuración de entorno
+
+1. Copiá el archivo `.env.example` a `.env.local` para definir tus variables de entorno locales.
+2. Ajustá los valores según el entorno donde corra el backend:
+   - `NEXT_PUBLIC_API_BASE_URL`: Base HTTP para las requests REST (sin `/` al final).
+   - `NEXT_PUBLIC_WS_BASE_URL`: Base del WebSocket opcional. Si no se define, el front la deduce usando el origin o la base de la API.
+   - `NEXT_PUBLIC_WS_PATH`: Path expuesto por el backend para el WebSocket (con `/` inicial).
+
+Ejemplo para producción:
+
+```
+NEXT_PUBLIC_API_BASE_URL=https://api.mi-dominio.com
+NEXT_PUBLIC_WS_BASE_URL=wss://api.mi-dominio.com
+NEXT_PUBLIC_WS_PATH=/ws
+```
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
