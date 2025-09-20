@@ -223,5 +223,3 @@ El front **no** corta la conexión si no hay datos (permite conexiones ociosas).
 
 
 
-
-
