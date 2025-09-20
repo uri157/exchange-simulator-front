@@ -18,7 +18,12 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ### Configuración de entorno
 
-1. Copiá el archivo `.env.example` a `.env.local` para definir tus variables de entorno locales.
+1. Copiá el archivo `.env.local.example` a `.env.local` para definir tus variables de entorno locales:
+
+   ```bash
+   cp .env.local.example .env.local
+   ```
+
 2. Ajustá los valores según el entorno donde corra el backend:
    - `NEXT_PUBLIC_API_BASE_URL`: Base HTTP para las requests REST (sin `/` al final).
    - `NEXT_PUBLIC_WS_BASE_URL`: Base del WebSocket opcional. Si no se define, el front la deduce usando el origin o la base de la API.

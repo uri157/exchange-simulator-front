@@ -17,6 +17,9 @@ import {
   useDatasetRange,
   useDatasetSymbols,
   useSessionPause,
+  useSessionEnable,
+  useSessionDisable,
+  useSessionDelete,
   useSessionResume,
   useSessionStart,
   useSessions,
@@ -53,6 +56,9 @@ export default function SessionsPage() {
   const startSession = useSessionStart();
   const pauseSession = useSessionPause();
   const resumeSession = useSessionResume();
+  const enableSession = useSessionEnable();
+  const disableSession = useSessionDisable();
+  const deleteSession = useSessionDelete();
   const datasetSymbolsQuery = useDatasetSymbols();
   const datasetIntervalsQuery = useDatasetIntervals(
     formState.symbol || null
@@ -137,6 +143,20 @@ export default function SessionsPage() {
     mutateAsync: resumeSessionMutateAsync,
     isPending: isResumingSession,
   } = resumeSession;
+  const {
+    mutateAsync: enableSessionMutateAsync,
+    isPending: isEnablingSession,
+  } = enableSession;
+  const {
+    mutateAsync: disableSessionMutateAsync,
+    isPending: isDisablingSession,
+  } = disableSession;
+  const {
+    mutateAsync: deleteSessionMutateAsync,
+    isPending: isDeletingSession,
+  } = deleteSession;
+
+  const refetchSessions = sessionsQuery.refetch;
 
   const columns = useMemo<DataTableColumn<SessionResponse>[]>(
     () => [
@@ -148,6 +168,15 @@ export default function SessionsPage() {
       },
       { key: "interval", header: "Intervalo" },
       { key: "status", header: "Estado" },
+      {
+        key: "enabled",
+        header: "Enabled",
+        render: (row) => (
+          <Badge variant={row.enabled ? "secondary" : "outline"}>
+            {row.enabled ? "On" : "Off"}
+          </Badge>
+        ),
+      },
       {
         key: "createdAt",
         header: "Creado",
@@ -170,6 +199,7 @@ export default function SessionsPage() {
                 try {
                   await startSessionMutateAsync(row.id);
                   toast.success("Sesión iniciada");
+                  await refetchSessions();
                 } catch (error) {
                   toast.error(getMessage(error));
                 }
@@ -189,6 +219,7 @@ export default function SessionsPage() {
                 try {
                   await pauseSessionMutateAsync(row.id);
                   toast.success("Sesión pausada");
+                  await refetchSessions();
                 } catch (error) {
                   toast.error(getMessage(error));
                 }
@@ -208,12 +239,60 @@ export default function SessionsPage() {
                 try {
                   await resumeSessionMutateAsync(row.id);
                   toast.success("Sesión reanudada");
+                  await refetchSessions();
                 } catch (error) {
                   toast.error(getMessage(error));
                 }
               }}
             >
               Resume
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                isEnablingSession ||
+                isDisablingSession ||
+                isDeletingSession
+              }
+              onClick={async () => {
+                try {
+                  if (row.enabled) {
+                    await disableSessionMutateAsync(row.id);
+                    toast.success("Sesión deshabilitada");
+                  } else {
+                    await enableSessionMutateAsync(row.id);
+                    toast.success("Sesión habilitada");
+                  }
+                  await refetchSessions();
+                } catch (error) {
+                  toast.error(getMessage(error));
+                }
+              }}
+            >
+              {row.enabled ? "Disable" : "Enable"}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isDeletingSession}
+              onClick={async () => {
+                const confirmed = window.confirm(
+                  "¿Confirmás que querés eliminar la sesión?"
+                );
+                if (!confirmed) {
+                  return;
+                }
+                try {
+                  await deleteSessionMutateAsync(row.id);
+                  toast.success("Sesión eliminada");
+                  await refetchSessions();
+                } catch (error) {
+                  toast.error(getMessage(error));
+                }
+              }}
+            >
+              Delete
             </Button>
             <Button asChild size="sm">
               <Link href={`/sessions/${row.id}`}>Detalle</Link>
@@ -229,6 +308,13 @@ export default function SessionsPage() {
       resumeSessionMutateAsync,
       isStartingSession,
       startSessionMutateAsync,
+      isEnablingSession,
+      enableSessionMutateAsync,
+      isDisablingSession,
+      disableSessionMutateAsync,
+      isDeletingSession,
+      deleteSessionMutateAsync,
+      refetchSessions,
     ]
   );
 

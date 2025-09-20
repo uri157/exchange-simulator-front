@@ -17,6 +17,9 @@ import {
   useSessionResume,
   useSessionSeek,
   useSessionStart,
+  useSessionEnable,
+  useSessionDisable,
+  useSessionDelete,
 } from "@/lib/hooks";
 import { formatDateTime, formatNumber } from "@/lib/time";
 import type { WsKlineData } from "@/lib/types";
@@ -35,6 +38,9 @@ export default function SessionDetailPage() {
   const pauseSession = useSessionPause();
   const resumeSession = useSessionResume();
   const seekSession = useSessionSeek();
+  const enableSession = useSessionEnable();
+  const disableSession = useSessionDisable();
+  const deleteSession = useSessionDelete();
   const refetchSession = sessionQuery.refetch;
 
   const {
@@ -53,6 +59,18 @@ export default function SessionDetailPage() {
     mutateAsync: seekSessionMutateAsync,
     isPending: isSeekingSession,
   } = seekSession;
+  const {
+    mutateAsync: enableSessionMutateAsync,
+    isPending: isEnablingSession,
+  } = enableSession;
+  const {
+    mutateAsync: disableSessionMutateAsync,
+    isPending: isDisablingSession,
+  } = disableSession;
+  const {
+    mutateAsync: deleteSessionMutateAsync,
+    isPending: isDeletingSession,
+  } = deleteSession;
 
   const [streams, setStreams] = useState<string>(searchParams.get("streams") ?? "");
   const [wsRows, setWsRows] = useState<WsKlineData[]>([]);
@@ -94,6 +112,10 @@ export default function SessionDetailPage() {
 
   const handleStart = async () => {
     if (!session) return;
+    if (!session.enabled) {
+      toast.error("La sesión está deshabilitada");
+      return;
+    }
     try {
       await startSessionOnce(session);
       toast.success("Sesión iniciada");
@@ -104,6 +126,10 @@ export default function SessionDetailPage() {
 
   const handlePause = async () => {
     if (!session || session.status.toLowerCase() !== "running") return;
+    if (!session.enabled) {
+      toast.error("La sesión está deshabilitada");
+      return;
+    }
     try {
       await pauseSessionMutateAsync(session.id);
       toast.success("Sesión pausada");
@@ -115,6 +141,10 @@ export default function SessionDetailPage() {
 
   const handleResume = async () => {
     if (!session || session.status.toLowerCase() !== "paused") return;
+    if (!session.enabled) {
+      toast.error("La sesión está deshabilitada");
+      return;
+    }
     try {
       await resumeSessionMutateAsync(session.id);
       toast.success("Sesión reanudada");
@@ -133,6 +163,10 @@ export default function SessionDetailPage() {
       toast.error("La sesión no admite más movimientos");
       return;
     }
+    if (!session.enabled) {
+      toast.error("La sesión está deshabilitada");
+      return;
+    }
     const timestamp = Number(seekValue);
     if (Number.isNaN(timestamp)) {
       toast.error("Timestamp inválido");
@@ -147,8 +181,48 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handleEnable = async () => {
+    if (!session) return;
+    try {
+      await enableSessionMutateAsync(session.id);
+      toast.success("Sesión habilitada");
+      await refetchSession();
+    } catch (error) {
+      toast.error(getMessage(error));
+    }
+  };
+
+  const handleDisable = async () => {
+    if (!session) return;
+    try {
+      await disableSessionMutateAsync(session.id);
+      toast.success("Sesión deshabilitada");
+      await refetchSession();
+    } catch (error) {
+      toast.error(getMessage(error));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!session) return;
+    const confirmed = window.confirm(
+      "¿Confirmás que querés eliminar la sesión?"
+    );
+    if (!confirmed) return;
+    try {
+      await deleteSessionMutateAsync(session.id);
+      toast.success("Sesión eliminada");
+      router.push("/sessions");
+    } catch (error) {
+      toast.error(getMessage(error));
+    }
+  };
+
   const startSessionOnce = useCallback(
     async (current: SessionResponse): Promise<void> => {
+      if (!current.enabled) {
+        throw new Error("La sesión está deshabilitada");
+      }
       if (current.status.toLowerCase() === "running") {
         return;
       }
@@ -172,6 +246,9 @@ export default function SessionDetailPage() {
   const ensureSessionRunning = useCallback(async (): Promise<void> => {
     if (!session) {
       throw new Error("Sesión no encontrada");
+    }
+    if (!session.enabled) {
+      throw new Error("La sesión está deshabilitada");
     }
     await startSessionOnce(session);
   }, [session, startSessionOnce]);
@@ -210,14 +287,19 @@ export default function SessionDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Sesión {session.id}</h1>
           <p className="text-sm text-muted-foreground">
             {session.symbols.join(", ")} · {session.interval}
           </p>
         </div>
-        <Badge variant="secondary">Estado: {session.status}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">Estado: {session.status}</Badge>
+          <Badge variant={session.enabled ? "secondary" : "outline"}>
+            Enabled: {session.enabled ? "Yes" : "No"}
+          </Badge>
+        </div>
       </div>
 
       <section className="rounded-lg border p-4">
@@ -225,19 +307,31 @@ export default function SessionDetailPage() {
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             onClick={handleStart}
-            disabled={isStartingSession || startPromiseRef.current !== null}
+            disabled={
+              isStartingSession || startPromiseRef.current !== null || !session.enabled
+            }
           >
             {isStartingSession ? "Iniciando..." : "Start"}
           </Button>
           <Button
             onClick={handlePause}
-            disabled={isPausingSession || !isSessionRunning || isSessionTerminal}
+            disabled={
+              isPausingSession ||
+              !isSessionRunning ||
+              isSessionTerminal ||
+              !session.enabled
+            }
           >
             {isPausingSession ? "Pausando..." : "Pause"}
           </Button>
           <Button
             onClick={handleResume}
-            disabled={isResumingSession || !isSessionPaused || isSessionTerminal}
+            disabled={
+              isResumingSession ||
+              !isSessionPaused ||
+              isSessionTerminal ||
+              !session.enabled
+            }
           >
             {isResumingSession ? "Reanudando..." : "Resume"}
           </Button>
@@ -246,16 +340,51 @@ export default function SessionDetailPage() {
               placeholder="Timestamp ms"
               value={seekValue}
               onChange={(event) => setSeekValue(event.target.value)}
+              disabled={!session.enabled || isSessionTerminal}
             />
-            <Button onClick={handleSeek} disabled={isSeekingSession || isSessionTerminal}>
+            <Button
+              onClick={handleSeek}
+              disabled={
+                isSeekingSession || isSessionTerminal || !session.enabled
+              }
+            >
               {isSeekingSession ? "Buscando..." : "Seek"}
             </Button>
           </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={session.enabled ? handleDisable : handleEnable}
+            disabled={
+              isEnablingSession || isDisablingSession || isDeletingSession
+            }
+          >
+            {session.enabled
+              ? isDisablingSession
+                ? "Deshabilitando..."
+                : "Disable"
+              : isEnablingSession
+              ? "Habilitando..."
+              : "Enable"}
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isDeletingSession}
+          >
+            {isDeletingSession ? "Eliminando..." : "Delete"}
+          </Button>
         </div>
         <div className="mt-4 text-sm text-muted-foreground">
           Inicio: {formatDateTime(session.startTime)} · Fin: {formatDateTime(session.endTime)} ·
           Speed: {session.speed} · Seed: {session.seed}
         </div>
+        {!session.enabled ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            La sesión está deshabilitada. Activala para reanudar las acciones.
+          </p>
+        ) : null}
         {isSessionEnded ? (
           <p className="mt-2 text-sm text-muted-foreground">
             La sesión finalizó; podés iniciar un replay con Start.
@@ -278,6 +407,10 @@ export default function SessionDetailPage() {
           }}
           onKline={handleKline}
           ensureSessionRunning={ensureSessionRunning}
+          disabled={!session.enabled}
+          connectDisabledReason={
+            session.enabled ? undefined : "La sesión está deshabilitada"
+          }
           onConnectionChange={(status) => {
             if (!status) {
               setReceivedCount(0);
