@@ -149,9 +149,6 @@ export default function SessionDetailPage() {
 
   const startSessionOnce = useCallback(
     async (current: SessionResponse): Promise<void> => {
-      if (isSessionCompletedStatus(current.status)) {
-        throw new Error("La sesión finalizó");
-      }
       if (current.status.toLowerCase() === "running") {
         return;
       }
@@ -205,9 +202,11 @@ export default function SessionDetailPage() {
     return <div className="h-64 animate-pulse rounded-md border bg-muted" />;
   }
 
-  const isSessionRunning = session.status.toLowerCase() === "running";
-  const isSessionPaused = session.status.toLowerCase() === "paused";
-  const isSessionCompleted = isSessionCompletedStatus(session.status);
+  const normalizedStatus = session.status.toLowerCase();
+  const isSessionRunning = normalizedStatus === "running";
+  const isSessionPaused = normalizedStatus === "paused";
+  const isSessionEnded = normalizedStatus === "ended";
+  const isSessionTerminal = isSessionCompletedStatus(session.status);
 
   return (
     <div className="space-y-6">
@@ -226,21 +225,19 @@ export default function SessionDetailPage() {
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             onClick={handleStart}
-            disabled={
-              isStartingSession || isSessionCompleted || startPromiseRef.current !== null
-            }
+            disabled={isStartingSession || startPromiseRef.current !== null}
           >
             {isStartingSession ? "Iniciando..." : "Start"}
           </Button>
           <Button
             onClick={handlePause}
-            disabled={isPausingSession || !isSessionRunning || isSessionCompleted}
+            disabled={isPausingSession || !isSessionRunning || isSessionTerminal}
           >
             {isPausingSession ? "Pausando..." : "Pause"}
           </Button>
           <Button
             onClick={handleResume}
-            disabled={isResumingSession || !isSessionPaused || isSessionCompleted}
+            disabled={isResumingSession || !isSessionPaused || isSessionTerminal}
           >
             {isResumingSession ? "Reanudando..." : "Resume"}
           </Button>
@@ -250,7 +247,7 @@ export default function SessionDetailPage() {
               value={seekValue}
               onChange={(event) => setSeekValue(event.target.value)}
             />
-            <Button onClick={handleSeek} disabled={isSeekingSession || isSessionCompleted}>
+            <Button onClick={handleSeek} disabled={isSeekingSession || isSessionTerminal}>
               {isSeekingSession ? "Buscando..." : "Seek"}
             </Button>
           </div>
@@ -259,7 +256,11 @@ export default function SessionDetailPage() {
           Inicio: {formatDateTime(session.startTime)} · Fin: {formatDateTime(session.endTime)} ·
           Speed: {session.speed} · Seed: {session.seed}
         </div>
-        {isSessionCompleted ? (
+        {isSessionEnded ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            La sesión finalizó; podés iniciar un replay con Start.
+          </p>
+        ) : isSessionTerminal ? (
           <p className="mt-2 text-sm text-destructive">
             La sesión finalizó. No se recibirán más velas.
           </p>
@@ -277,7 +278,6 @@ export default function SessionDetailPage() {
           }}
           onKline={handleKline}
           ensureSessionRunning={ensureSessionRunning}
-          disabled={isSessionCompleted}
           onConnectionChange={(status) => {
             if (!status) {
               setReceivedCount(0);
