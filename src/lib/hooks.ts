@@ -25,6 +25,9 @@ import {
   listDatasets,
   listSessions,
   pauseSession,
+  enableSession,
+  disableSession,
+  deleteSession,
   resumeSession,
   seekSession,
   startSession,
@@ -292,6 +295,39 @@ export function useSessionSeek() {
       seekSession(id, timestamp),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["session", variables.id] });
+    },
+  });
+}
+
+export function useSessionEnable() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => enableSession(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["session", id] });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+export function useSessionDisable() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => disableSession(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["session", id] });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+export function useSessionDelete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteSession(id),
+    onSuccess: (_, id) => {
+      queryClient.removeQueries({ queryKey: ["session", id] });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
   });
 }

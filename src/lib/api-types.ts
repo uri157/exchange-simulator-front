@@ -77,6 +77,7 @@ export interface SessionResponse extends SessionRequest {
   status: SessionStatus;
   createdAt: number;
   updatedAt?: number;
+  enabled: boolean;
 }
 
 export interface AccountBalance {

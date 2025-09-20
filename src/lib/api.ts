@@ -206,6 +206,22 @@ export function seekSession(id: string, timestamp: number) {
   );
 }
 
+export function enableSession(id: string) {
+  return unwrap(
+    apiClient.patch(`api/v1/sessions/${id}/enable`).json<SessionResponse>()
+  );
+}
+
+export function disableSession(id: string) {
+  return unwrap(
+    apiClient.patch(`api/v1/sessions/${id}/disable`).json<SessionResponse>()
+  );
+}
+
+export function deleteSession(id: string) {
+  return unwrap(apiClient.delete(`api/v1/sessions/${id}`).then(() => undefined));
+}
+
 /** ====== Account ====== */
 export function getSessionsAccount(sessionId: string) {
   return unwrap(

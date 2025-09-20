@@ -18,6 +18,7 @@ interface WsControlsProps {
   ensureSessionRunning?: () => Promise<void>;
   disabled?: boolean;
   onConnectionChange?: (connected: boolean) => void;
+  connectDisabledReason?: string;
 }
 
 export function WsControls({
@@ -29,6 +30,7 @@ export function WsControls({
   ensureSessionRunning,
   disabled = false,
   onConnectionChange,
+  connectDisabledReason,
 }: WsControlsProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -38,6 +40,9 @@ export function WsControls({
   const [consumedQuery, setConsumedQuery] = useState<string | null>(null);
   const [consumedStreams, setConsumedStreams] = useState<string | null>(null);
   const [noDataHint, setNoDataHint] = useState(false);
+  const [lastConnectionState, setLastConnectionState] = useState<
+    "idle" | "closed" | "error"
+  >("idle");
 
   const socketRef = useRef<WebSocket | null>(null);
   const closingManuallyRef = useRef(false);
@@ -45,26 +50,43 @@ export function WsControls({
   const prevSessionIdRef = useRef(sessionId);
   const prevStreamsRef = useRef(streams);
 
-  const cleanupAfterSocket = useCallback(() => {
+  const clearNoDataTimer = useCallback(() => {
     if (noDataTimerRef.current) {
       clearTimeout(noDataTimerRef.current);
       noDataTimerRef.current = null;
     }
+  }, []);
 
-    socketRef.current = null;
-    setConnected(false);
-    setIsConnecting(false);
-    setConnections(null);
-    setMessageCount(0);
-    setNoDataHint(false);
-    onStats?.(null);
-    onConnectionChange?.(false);
-  }, [onConnectionChange, onStats]);
+  const scheduleNoDataHint = useCallback(() => {
+    clearNoDataTimer();
+    noDataTimerRef.current = setTimeout(() => {
+      setNoDataHint(true);
+    }, 10_000);
+  }, [clearNoDataTimer]);
+
+  const cleanupAfterSocket = useCallback(
+    (nextState: "idle" | "closed" | "error" = "closed") => {
+      clearNoDataTimer();
+
+      socketRef.current = null;
+      setConnected(false);
+      setIsConnecting(false);
+      setConnections(null);
+      setMessageCount(0);
+      setNoDataHint(false);
+      setLastConnectionState(nextState);
+      onStats?.(null);
+      onConnectionChange?.(false);
+    },
+    [clearNoDataTimer, onConnectionChange, onStats]
+  );
+
+  const trimmedStreams = streams.trim();
 
   const handleDisconnect = useCallback(() => {
     const socket = socketRef.current;
     if (!socket) {
-      cleanupAfterSocket();
+      cleanupAfterSocket("closed");
       return;
     }
 
@@ -72,7 +94,7 @@ export function WsControls({
     try {
       socket.close(1000, "Client disconnected");
     } catch {
-      cleanupAfterSocket();
+      cleanupAfterSocket("closed");
     }
   }, [cleanupAfterSocket]);
 
@@ -82,7 +104,6 @@ export function WsControls({
       return;
     }
 
-    const trimmedStreams = streams.trim();
     if (!trimmedStreams) {
       toast.error("Ingresá un stream válido");
       return;
@@ -90,7 +111,8 @@ export function WsControls({
 
     try {
       setIsConnecting(true);
-      if (ensureSessionRunning) {
+      setLastConnectionState("idle");
+      if (ensureSessionRunning && !disabled) {
         await ensureSessionRunning();
       }
 
@@ -110,28 +132,26 @@ export function WsControls({
         setConnected(true);
         toast.success("Stream conectado");
         onConnectionChange?.(true);
-        if (noDataTimerRef.current) {
-          clearTimeout(noDataTimerRef.current);
-        }
-        noDataTimerRef.current = setTimeout(() => {
-          setNoDataHint(true);
-        }, 10_000);
+        setLastConnectionState("idle");
+        scheduleNoDataHint();
       });
 
       socket.addEventListener("message", (event) => {
         const message = parseWsEventData(event.data);
         if (!message) {
-          console.warn("WS mensaje inválido", event.data);
+          if (typeof event.data === "string") {
+            console.warn("WS mensaje no reconocido", event.data);
+            toast.error(`Error en la conexión de WebSocket: ${event.data}`);
+          } else {
+            console.warn("WS mensaje inválido", event.data);
+          }
           return;
         }
 
         if (message.event === "kline") {
           setMessageCount((prev) => prev + 1);
-          if (noDataTimerRef.current) {
-            clearTimeout(noDataTimerRef.current);
-            noDataTimerRef.current = null;
-            setNoDataHint(false);
-          }
+          setNoDataHint(false);
+          scheduleNoDataHint();
           onKline(message.data);
           return;
         }
@@ -142,31 +162,50 @@ export function WsControls({
         }
       });
 
-      socket.addEventListener("error", () => {
-        toast.error("Error en la conexión de WebSocket");
-      });
-
       socket.addEventListener("close", (event) => {
-        const description = event.reason
-          ? `(${event.code}) ${event.reason}`
-          : `(${event.code})`;
+        const reasonText = event.reason ? ` - ${event.reason}` : "";
+        let nextState: "closed" | "error" = event.wasClean ? "closed" : "error";
 
-        if (closingManuallyRef.current) {
-          toast.info(`Stream desconectado ${description}`);
+        if (event.code === 1000) {
+          toast.info("Stream cerrado (1000)");
+          nextState = "closed";
+        } else if (event.code === 1001) {
+          toast.warning(`Stream cerrado (1001${reasonText})`);
+          nextState = "closed";
+        } else if (event.code === 1006) {
+          toast.error(`Error en la conexión de WebSocket (1006${reasonText})`);
+          nextState = "error";
+        } else if (event.code === 1011) {
+          toast.error(`Keepalive timeout o error del servidor (1011${reasonText})`);
+          nextState = "error";
         } else if (event.wasClean) {
-          toast.info(`Stream cerrado ${description}`);
+          const detail = event.reason
+            ? ` (${event.code}) ${event.reason}`
+            : ` (${event.code})`;
+          toast.info(`Stream cerrado${detail}`);
+          nextState = "closed";
         } else {
-          toast.error(`Stream cerrado ${description}`);
+          const detail = event.reason
+            ? ` (${event.code}) ${event.reason}`
+            : ` (${event.code})`;
+          toast.error(`Error en la conexión de WebSocket${detail}`);
+          nextState = "error";
         }
 
         closingManuallyRef.current = false;
-        cleanupAfterSocket();
+        cleanupAfterSocket(nextState);
+      });
+
+      socket.addEventListener("error", () => {
+        toast.error("Error en la conexión de WebSocket");
+        setLastConnectionState("error");
       });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "No se pudo conectar al stream";
       toast.error(message);
       handleDisconnect();
+      setLastConnectionState("error");
     } finally {
       setIsConnecting(false);
     }
@@ -178,8 +217,10 @@ export function WsControls({
     onConnectionChange,
     onKline,
     onStats,
+    scheduleNoDataHint,
     sessionId,
-    streams,
+    trimmedStreams,
+    disabled,
   ]);
 
   useEffect(() => {
@@ -221,7 +262,18 @@ export function WsControls({
   }, [consumedQuery, consumedStreams, consumedUrl]);
 
   const isToggleDisabled =
-    isConnecting || (!connected && (disabled || !streams.trim()));
+    isConnecting || (!connected && (disabled || !trimmedStreams));
+
+  const connectGuardTitle =
+    !connected && disabled && connectDisabledReason
+      ? connectDisabledReason
+      : undefined;
+
+  const showRetryButton =
+    !connected &&
+    !isConnecting &&
+    !disabled &&
+    lastConnectionState !== "idle";
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border p-4">
@@ -251,9 +303,18 @@ export function WsControls({
         disabled={disabled}
       />
       <div className="flex items-center gap-2">
-        <Button onClick={handleToggle} disabled={isToggleDisabled}>
+        <Button
+          onClick={handleToggle}
+          disabled={isToggleDisabled}
+          title={connectGuardTitle}
+        >
           {connected ? "Desconectar" : isConnecting ? "Conectando..." : "Conectar stream"}
         </Button>
+        {showRetryButton ? (
+          <Button variant="outline" onClick={handleToggle}>
+            Reintentar
+          </Button>
+        ) : null}
         {noDataHint ? (
           <span className="text-xs text-muted-foreground">
             Sin datos — verificá rango/estado
@@ -261,11 +322,16 @@ export function WsControls({
         ) : null}
       </div>
       {consumedUrl ? (
-        <div className="overflow-hidden rounded-md border bg-muted/40 p-2 text-xs font-mono">
-          <p className="break-all">WS_CONSUMED_URL={consumedUrl}</p>
-          <p className="break-all">WS_CONSUMED_QUERY={consumedQuery}</p>
-          <p className="break-all">STREAMS_VALUE={consumedStreams}</p>
-        </div>
+        <details className="overflow-hidden rounded-md border bg-muted/40 p-2 text-xs">
+          <summary className="cursor-pointer text-sm font-medium">
+            Detalles de la conexión
+          </summary>
+          <div className="mt-2 space-y-1 font-mono">
+            <p className="break-all">WS_CONSUMED_URL={consumedUrl}</p>
+            <p className="break-all">WS_CONSUMED_QUERY={consumedQuery}</p>
+            <p className="break-all">STREAMS_VALUE={consumedStreams}</p>
+          </div>
+        </details>
       ) : null}
     </div>
   );
