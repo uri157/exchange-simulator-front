@@ -38,6 +38,7 @@ export function WsControls({
   const [consumedQuery, setConsumedQuery] = useState<string | null>(null);
   const [consumedStreams, setConsumedStreams] = useState<string | null>(null);
   const [noDataHint, setNoDataHint] = useState(false);
+
   const socketRef = useRef<WebSocket | null>(null);
   const closingManuallyRef = useRef(false);
   const noDataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -169,15 +170,21 @@ export function WsControls({
     } finally {
       setIsConnecting(false);
     }
-  }, [cleanupAfterSocket, connected, ensureSessionRunning, handleDisconnect, onConnectionChange, onKline, onStats, sessionId, streams]);
+  }, [
+    cleanupAfterSocket,
+    connected,
+    ensureSessionRunning,
+    handleDisconnect,
+    onConnectionChange,
+    onKline,
+    onStats,
+    sessionId,
+    streams,
+  ]);
 
   useEffect(() => {
-    if (!disabled) {
-      return;
-    }
-    if (!connected) {
-      return;
-    }
+    if (!disabled) return;
+    if (!connected) return;
     handleDisconnect();
   }, [connected, disabled, handleDisconnect]);
 
@@ -206,9 +213,7 @@ export function WsControls({
   }, [handleDisconnect]);
 
   useEffect(() => {
-    if (!consumedUrl || !consumedQuery || !consumedStreams) {
-      return;
-    }
+    if (!consumedUrl || !consumedQuery || !consumedStreams) return;
 
     console.info(`WS_CONSUMED_URL=${consumedUrl}`);
     console.info(`WS_CONSUMED_QUERY=${consumedQuery}`);

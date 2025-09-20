@@ -9,10 +9,10 @@ function normalizeBase(base: string): string {
 
 function normalizePath(path: string): string {
   if (!path) {
-    return "/api/v1/ws";
+    return "/ws";
   }
   const normalized = (path.startsWith("/") ? path : `/${path}`).replace(/\/+$/, "");
-  return normalized || "/api/v1/ws";
+  return normalized || "/ws";
 }
 
 export interface WsRequestInfo {
@@ -30,7 +30,7 @@ export interface BuildWsRequestOptions {
 export function buildWsRequest({ sessionId, streams }: BuildWsRequestOptions): WsRequestInfo {
   const base = normalizeBase(resolveWsBase());
   const path = normalizePath(WS_PATH);
-  const query = new URLSearchParams({ sessionId, streams }).toString();
+  const query = new URLSearchParams({ session_id: sessionId, streams }).toString();
 
   return {
     base,
@@ -110,8 +110,8 @@ export function parseWsEnvelope(raw: unknown): WsMessageEnvelope | null {
     return null;
   }
 
-  const event = raw.event;
-  const data = raw.data;
+  const event = (raw as Record<string, unknown>).event;
+  const data = (raw as Record<string, unknown>).data;
 
   if (event === "kline") {
     const parsed = parseWsKlineData(data);
