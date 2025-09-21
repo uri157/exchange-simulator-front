@@ -1,7 +1,12 @@
 "use client";
 
 import { WS_BASE_URL, WS_PATH } from "@/lib/env";
-import type { WsKlineData, WsMessageEnvelope, WsStatsData } from "@/lib/types";
+import type {
+  WsKlineData,
+  WsMessageEnvelope,
+  WsStatsData,
+  WsWarningData,
+} from "@/lib/types";
 
 export interface WsRequestInfo {
   base: string;
@@ -93,22 +98,50 @@ function parseWsStatsData(value: unknown): WsStatsData | null {
   return { connections };
 }
 
+function parseWsWarningData(value: unknown): WsWarningData | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const type = typeof value.type === "string" ? value.type : null;
+  if (!type) {
+    return null;
+  }
+
+  const skippedValue = value.skipped;
+  const skippedNumber = Number(skippedValue);
+
+  const warning: WsWarningData = { type };
+  if (Number.isFinite(skippedNumber)) {
+    warning.skipped = skippedNumber;
+  }
+
+  return warning;
+}
+
 export function parseWsEnvelope(raw: unknown): WsMessageEnvelope | null {
   if (!isRecord(raw)) {
     return null;
   }
 
-  const event = (raw as Record<string, unknown>).event;
-  const data = (raw as Record<string, unknown>).data;
+  const envelope = raw as Record<string, unknown>;
+  const event = envelope.event;
+  const data = envelope.data;
+  const stream = typeof envelope.stream === "string" ? envelope.stream : null;
 
   if (event === "kline") {
     const parsed = parseWsKlineData(data);
-    return parsed ? { event: "kline", data: parsed } : null;
+    return parsed ? { event: "kline", data: parsed, stream } : null;
   }
 
   if (event === "stats") {
     const parsed = parseWsStatsData(data);
-    return parsed ? { event: "stats", data: parsed } : null;
+    return parsed ? { event: "stats", data: parsed, stream } : null;
+  }
+
+  if (event === "warning") {
+    const parsed = parseWsWarningData(data);
+    return parsed ? { event: "warning", data: parsed, stream } : null;
   }
 
   return null;
