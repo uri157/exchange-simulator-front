@@ -119,6 +119,10 @@ export function SessionControls({
       toast.error("La sesión está deshabilitada");
       return;
     }
+    if (!statusState.isRunning) {
+      toast.error("La sesión debe estar en ejecución para hacer seek");
+      return;
+    }
     if (statusState.isTerminal) {
       toast.error("La sesión no admite más movimientos");
       return;
@@ -137,7 +141,7 @@ export function SessionControls({
     } catch (error) {
       toast.error(getMessage(error));
     }
-  }, [handleAfterMutation, seekSession, seekValue, session.enabled, session.id, statusState.isTerminal]);
+  }, [handleAfterMutation, seekSession, seekValue, session.enabled, session.id, statusState.isRunning, statusState.isTerminal]);
 
   const handleEnable = useCallback(async () => {
     try {
@@ -207,11 +211,13 @@ export function SessionControls({
             placeholder="Timestamp ms"
             value={seekValue}
             onChange={(event) => setSeekValue(event.target.value)}
-            disabled={!session.enabled || statusState.isTerminal}
+            disabled={!session.enabled || statusState.isTerminal || !statusState.isRunning}
           />
           <Button
             onClick={handleSeek}
-            disabled={seekSession.isPending || !session.enabled || statusState.isTerminal}
+            disabled={
+              seekSession.isPending || !session.enabled || statusState.isTerminal || !statusState.isRunning
+            }
           >
             {seekSession.isPending ? "Buscando..." : "Seek"}
           </Button>

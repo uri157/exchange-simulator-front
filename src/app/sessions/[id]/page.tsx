@@ -6,10 +6,9 @@ import { SessionDetailsPage } from "@/components/sessions/SessionDetailsPage";
 import { useSession } from "@/lib/hooks";
 
 export default function SessionDetailPage() {
-  const params = useParams<{ id?: string }>();
-  const id = typeof params?.id === "string" ? params.id : "";
+  const { id } = useParams<{ id: string }>();
 
-  const sessionQuery = useSession(id ? id : null);
+  const sessionQuery = useSession(id);
 
   return <SessionDetailsPage id={id} prefetched={sessionQuery.data ?? undefined} />;
 }

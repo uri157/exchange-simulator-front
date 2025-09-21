@@ -75,12 +75,19 @@ export function SessionStreamPanel({
 
   const handleDisconnect = useCallback(() => {
     const socket = socketRef.current;
+
+    // No socket: solo normalizamos estado local
     if (!socket) {
       cleanupSocket();
       resetRuntimeState();
       setConnectionState("closed");
       setCloseMessage("Conexión cerrada");
       setErrorMessage(null);
+      return;
+    }
+
+    // Si ya está cerrando/cerrado, no hacemos nada
+    if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
       return;
     }
 
@@ -97,7 +104,10 @@ export function SessionStreamPanel({
   }, [cleanupSocket, resetRuntimeState]);
 
   const handleConnect = useCallback(() => {
-    if (isConnecting || connectionState === "connected") {
+    // Evitar conexiones duplicadas por estado o readyState subyacente
+    if (isConnecting || connectionState === "connected") return;
+    const existing = socketRef.current;
+    if (existing && (existing.readyState === WebSocket.CONNECTING || existing.readyState === WebSocket.OPEN)) {
       return;
     }
 
@@ -134,9 +144,7 @@ export function SessionStreamPanel({
 
       const handleMessage = (event: MessageEvent) => {
         const message = parseWsEventData(event.data);
-        if (!message) {
-          return;
-        }
+        if (!message) return;
 
         if (message.event === "kline") {
           setLastKline(message.data);
@@ -217,8 +225,9 @@ export function SessionStreamPanel({
   useEffect(() => {
     return () => {
       const socket = socketRef.current;
-      if (socket) {
+      if (socket && socket.readyState !== WebSocket.CLOSED) {
         try {
+          closingManuallyRef.current = true;
           socket.close(1000, "Component disposed");
         } catch {
           /* noop */
@@ -229,12 +238,8 @@ export function SessionStreamPanel({
   }, [cleanupSocket]);
 
   useEffect(() => {
-    if (session.enabled) {
-      return;
-    }
-    if (!socketRef.current) {
-      return;
-    }
+    if (session.enabled) return;
+    if (!socketRef.current) return;
     handleDisconnect();
   }, [handleDisconnect, session.enabled]);
 
@@ -267,6 +272,9 @@ export function SessionStreamPanel({
     session.enabled &&
     !isConnecting &&
     connectionState !== "connected" &&
+    (!socketRef.current ||
+      socketRef.current.readyState === WebSocket.CLOSING ||
+      socketRef.current.readyState === WebSocket.CLOSED) &&
     Boolean(trimmedStreams);
 
   const showRetry =

@@ -143,6 +143,7 @@ export function useCreateDataset() {
     onSuccess: () => {
       invalidateDatasetDependentQueries(queryClient);
     },
+    retry: false,
   });
 }
 
@@ -153,6 +154,7 @@ export function useIngestDataset() {
     onSuccess: () => {
       invalidateDatasetDependentQueries(queryClient);
     },
+    retry: false,
   });
 }
 
@@ -231,7 +233,7 @@ export function useKlines(params: FetchKlinesParams | null) {
 }
 
 export function useKlineTableData(klines: RestKline[]) {
-  return useMemo(() => klines.sort((a, b) => b.closeTime - a.closeTime), [
+  return useMemo(() => [...klines].sort((a, b) => b.closeTime - a.closeTime), [
     klines,
   ]);
 }
@@ -262,6 +264,7 @@ export function useCreateSession() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
+    retry: false,
   });
 }
 
@@ -285,6 +288,7 @@ export function useSessionPause() {
       queryClient.invalidateQueries({ queryKey: ["session", id] });
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
+    retry: false,
   });
 }
 
@@ -296,6 +300,7 @@ export function useSessionResume() {
       queryClient.invalidateQueries({ queryKey: ["session", id] });
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
+    retry: false,
   });
 }
 
@@ -307,6 +312,7 @@ export function useSessionSeek() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["session", variables.id] });
     },
+    retry: false,
   });
 }
 
@@ -318,6 +324,7 @@ export function useSessionEnable() {
       queryClient.invalidateQueries({ queryKey: ["session", id] });
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
+    retry: false,
   });
 }
 
@@ -329,6 +336,7 @@ export function useSessionDisable() {
       queryClient.invalidateQueries({ queryKey: ["session", id] });
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
+    retry: false,
   });
 }
 
@@ -340,6 +348,7 @@ export function useSessionDelete() {
       queryClient.removeQueries({ queryKey: ["session", id] });
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
+    retry: false,
   });
 }
 
