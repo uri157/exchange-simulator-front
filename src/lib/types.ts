@@ -14,8 +14,20 @@ export interface WsStatsData {
   connections: number;
 }
 
-export type WsEventType = "kline" | "stats";
+export interface WsWarningData {
+  type: string;
+  skipped?: number;
+}
+
+export type WsEventType = "kline" | "stats" | "warning";
+
+type WsMessageEnvelopeBase<TEvent extends WsEventType, TData> = {
+  event: TEvent;
+  data: TData;
+  stream?: string | null;
+};
 
 export type WsMessageEnvelope =
-  | { event: "kline"; data: WsKlineData }
-  | { event: "stats"; data: WsStatsData };
+  | WsMessageEnvelopeBase<"kline", WsKlineData>
+  | WsMessageEnvelopeBase<"stats", WsStatsData>
+  | WsMessageEnvelopeBase<"warning", WsWarningData>;
