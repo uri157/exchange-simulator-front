@@ -59,8 +59,9 @@ export function SessionControls({
       toast.error("La sesión está deshabilitada");
       return;
     }
-    if (statusState.isRunning || statusState.isEnded) {
-      toast.info("La sesión ya está iniciada");
+    // Permitimos iniciar cuando está "ended" o "paused". Solo bloqueamos si ya corre.
+    if (statusState.isRunning) {
+      toast.info("La sesión ya está en ejecución");
       return;
     }
 
@@ -71,7 +72,7 @@ export function SessionControls({
     } catch (error) {
       toast.error(getMessage(error));
     }
-  }, [handleAfterMutation, session.enabled, session.id, startSession, statusState.isEnded, statusState.isRunning]);
+  }, [handleAfterMutation, session.enabled, session.id, startSession, statusState.isRunning]);
 
   const handlePause = useCallback(async () => {
     console.debug("[SessionControls] pause clicked", { sessionId: session.id });
@@ -196,7 +197,7 @@ export function SessionControls({
             type="button"
             onClick={handleStart}
             disabled={
-              startSession.isPending || statusState.isRunning || statusState.isEnded || !session.enabled
+              startSession.isPending || statusState.isRunning || !session.enabled
             }
           >
             {startSession.isPending ? "Iniciando..." : "Start"}
