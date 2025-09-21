@@ -31,15 +31,24 @@ export function SessionDetailsPage({ id, prefetched }: SessionDetailsPageProps) 
 
   const sessionQuery = useSession(id ? id : null);
   const session = sessionQuery.data ?? prefetched ?? null;
+  const effectiveSessionId = session?.id ?? id;
 
   const [streams, setStreams] = useState(() => searchParams?.get("streams") ?? "");
   const [wsRows, setWsRows] = useState<WsKlineData[]>([]);
   const [receivedCount, setReceivedCount] = useState(0);
 
   useEffect(() => {
+    console.debug("[SessionDetailsPage] mount", { sessionId: id });
+    return () => {
+      console.debug("[SessionDetailsPage] unmount", { sessionId: id });
+    };
+  }, [id]);
+
+  useEffect(() => {
     const nextStreams = searchParams?.get("streams") ?? "";
+    console.debug("[SessionDetailsPage] search params updated", { sessionId: id, streams: nextStreams });
     setStreams((prev) => (prev === nextStreams ? prev : nextStreams));
-  }, [searchParams]);
+  }, [id, searchParams]);
 
   const updateQuery = useCallback(
     (value: string) => {
@@ -60,16 +69,25 @@ export function SessionDetailsPage({ id, prefetched }: SessionDetailsPageProps) 
     if (streams) return;
     const defaultStream = buildDefaultStream(session);
     if (!defaultStream) return;
+    console.debug("[SessionDetailsPage] applying default stream", {
+      sessionId: session.id,
+      defaultStream,
+    });
     setStreams(defaultStream);
     updateQuery(defaultStream);
   }, [session, streams, updateQuery]);
 
   useEffect(() => {
+    console.debug("[SessionDetailsPage] streams changed", { sessionId: effectiveSessionId, streams });
     setWsRows([]);
     setReceivedCount(0);
-  }, [streams]);
+  }, [effectiveSessionId, streams]);
 
   const handleKline = useCallback((kline: WsKlineData) => {
+    console.debug("[SessionDetailsPage] kline received", {
+      sessionId: effectiveSessionId,
+      closeTime: kline.closeTime,
+    });
     setReceivedCount((prev) => prev + 1);
     setWsRows((prev) => {
       const map = new Map(prev.map((row) => [row.closeTime, row] as const));
@@ -77,18 +95,23 @@ export function SessionDetailsPage({ id, prefetched }: SessionDetailsPageProps) 
       const next = Array.from(map.values()).sort((a, b) => b.closeTime - a.closeTime);
       return next.slice(0, MAX_ROWS);
     });
-  }, []);
+  }, [effectiveSessionId]);
 
   const handleResetCounters = useCallback(() => {
+    console.debug("[SessionDetailsPage] resetting counters", { sessionId: effectiveSessionId });
     setReceivedCount(0);
-  }, []);
+  }, [effectiveSessionId]);
 
   const handleStreamsChange = useCallback(
     (value: string) => {
+      console.debug("[SessionDetailsPage] handleStreamsChange", {
+        sessionId: effectiveSessionId,
+        value,
+      });
       setStreams(value);
       updateQuery(value);
     },
-    [updateQuery]
+    [effectiveSessionId, updateQuery]
   );
 
   const columns = useMemo<DataTableColumn<WsKlineData>[]>(

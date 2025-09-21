@@ -74,10 +74,17 @@ export function SessionStreamPanel({
   }, [onReset]);
 
   const handleDisconnect = useCallback(() => {
+    console.debug("[SessionStreamPanel] handleDisconnect invoked", {
+      sessionId: session.id,
+      readyState: socketRef.current?.readyState,
+    });
     const socket = socketRef.current;
 
     // No socket: solo normalizamos estado local
     if (!socket) {
+      console.debug("[SessionStreamPanel] no active socket on disconnect", {
+        sessionId: session.id,
+      });
       cleanupSocket();
       resetRuntimeState();
       setConnectionState("closed");
@@ -101,10 +108,16 @@ export function SessionStreamPanel({
       setCloseMessage("Conexión cerrada");
       setErrorMessage(null);
     }
-  }, [cleanupSocket, resetRuntimeState]);
+  }, [cleanupSocket, resetRuntimeState, session.id]);
 
   const handleConnect = useCallback(() => {
     // Evitar conexiones duplicadas por estado o readyState subyacente
+    console.debug("[SessionStreamPanel] handleConnect clicked", {
+      sessionId: session.id,
+      isConnecting,
+      connectionState,
+      streams: trimmedStreams,
+    });
     if (isConnecting || connectionState === "connected") return;
     const existing = socketRef.current;
     if (existing && (existing.readyState === WebSocket.CONNECTING || existing.readyState === WebSocket.OPEN)) {
@@ -112,11 +125,17 @@ export function SessionStreamPanel({
     }
 
     if (!trimmedStreams) {
+      console.debug("[SessionStreamPanel] handleConnect aborted: empty streams", {
+        sessionId: session.id,
+      });
       toast.error("Ingresá un stream válido");
       return;
     }
 
     if (!session.enabled) {
+      console.debug("[SessionStreamPanel] handleConnect aborted: session disabled", {
+        sessionId: session.id,
+      });
       toast.error("La sesión está deshabilitada");
       return;
     }
@@ -130,6 +149,11 @@ export function SessionStreamPanel({
       resetRuntimeState();
 
       const request = buildWsRequest({ sessionId: session.id, streams: trimmedStreams });
+      console.debug("[SessionStreamPanel] opening websocket", {
+        sessionId: session.id,
+        url: request.url,
+        query: request.query,
+      });
       setConsumedUrl(request.url);
       setConsumedQuery(request.query);
 
@@ -138,6 +162,10 @@ export function SessionStreamPanel({
       closingManuallyRef.current = false;
 
       const handleOpen = () => {
+        console.debug("[SessionStreamPanel] websocket open", {
+          sessionId: session.id,
+          url: socket.url,
+        });
         setIsConnecting(false);
         setConnectionState("connected");
       };
@@ -147,17 +175,32 @@ export function SessionStreamPanel({
         if (!message) return;
 
         if (message.event === "kline") {
+          console.debug("[SessionStreamPanel] websocket message:kline", {
+            sessionId: session.id,
+            stream: message.stream,
+            closeTime: message.data.closeTime,
+          });
           setLastKline(message.data);
           onKline(message.data);
           return;
         }
 
         if (message.event === "stats") {
+          console.debug("[SessionStreamPanel] websocket message:stats", {
+            sessionId: session.id,
+            connections: message.data.connections,
+          });
           setConnections(message.data.connections);
           return;
         }
 
         if (message.event === "warning") {
+          console.debug("[SessionStreamPanel] websocket message:warning", {
+            sessionId: session.id,
+            stream: message.stream,
+            type: message.data.type,
+            skipped: message.data.skipped,
+          });
           const skipped =
             typeof message.data.skipped === "number" && Number.isFinite(message.data.skipped)
               ? ` — velas omitidas: ${message.data.skipped}`
@@ -168,6 +211,13 @@ export function SessionStreamPanel({
       };
 
       const handleClose = (event: CloseEvent) => {
+        console.debug("[SessionStreamPanel] websocket close", {
+          sessionId: session.id,
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          closedByUser: closingManuallyRef.current,
+        });
         cleanupSocket();
         resetRuntimeState();
         setIsConnecting(false);
@@ -191,6 +241,9 @@ export function SessionStreamPanel({
       };
 
       const handleError = () => {
+        console.debug("[SessionStreamPanel] websocket error", {
+          sessionId: session.id,
+        });
         setIsConnecting(false);
         setConnectionState("error");
         setErrorMessage("Error en la conexión de WebSocket");
@@ -209,6 +262,10 @@ export function SessionStreamPanel({
       setErrorMessage(message);
       setCloseMessage(null);
       resetRuntimeState();
+      console.debug("[SessionStreamPanel] websocket connection failed", {
+        sessionId: session.id,
+        error,
+      });
       toast.error(message);
     }
   }, [
@@ -223,7 +280,9 @@ export function SessionStreamPanel({
   ]);
 
   useEffect(() => {
+    console.debug("[SessionStreamPanel] mounting", { sessionId: session.id });
     return () => {
+      console.debug("[SessionStreamPanel] unmounting", { sessionId: session.id });
       const socket = socketRef.current;
       if (socket && socket.readyState !== WebSocket.CLOSED) {
         try {
@@ -235,13 +294,24 @@ export function SessionStreamPanel({
       }
       cleanupSocket();
     };
-  }, [cleanupSocket]);
+  }, [cleanupSocket, session.id]);
 
   useEffect(() => {
+    console.debug("[SessionStreamPanel] session enabled changed", {
+      sessionId: session.id,
+      enabled: session.enabled,
+    });
     if (session.enabled) return;
     if (!socketRef.current) return;
     handleDisconnect();
-  }, [handleDisconnect, session.enabled]);
+  }, [handleDisconnect, session.enabled, session.id]);
+
+  useEffect(() => {
+    console.debug("[SessionStreamPanel] streams prop updated", {
+      sessionId: session.id,
+      streams,
+    });
+  }, [session.id, streams]);
 
   const shortcuts = useMemo(() => {
     return session.symbols.map((symbol) => ({
