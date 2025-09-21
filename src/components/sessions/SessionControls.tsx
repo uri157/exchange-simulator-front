@@ -54,6 +54,7 @@ export function SessionControls({
   }, [onSessionUpdated]);
 
   const handleStart = useCallback(async () => {
+    console.debug("[SessionControls] start clicked", { sessionId: session.id });
     if (!session.enabled) {
       toast.error("La sesión está deshabilitada");
       return;
@@ -73,6 +74,7 @@ export function SessionControls({
   }, [handleAfterMutation, session.enabled, session.id, startSession, statusState.isEnded, statusState.isRunning]);
 
   const handlePause = useCallback(async () => {
+    console.debug("[SessionControls] pause clicked", { sessionId: session.id });
     if (!session.enabled) {
       toast.error("La sesión está deshabilitada");
       return;
@@ -92,6 +94,7 @@ export function SessionControls({
   }, [handleAfterMutation, pauseSession, session.enabled, session.id, statusState.isRunning]);
 
   const handleResume = useCallback(async () => {
+    console.debug("[SessionControls] resume clicked", { sessionId: session.id });
     if (!session.enabled) {
       toast.error("La sesión está deshabilitada");
       return;
@@ -111,6 +114,7 @@ export function SessionControls({
   }, [handleAfterMutation, resumeSession, session.enabled, session.id, statusState.isPaused]);
 
   const handleSeek = useCallback(async () => {
+    console.debug("[SessionControls] seek clicked", { sessionId: session.id, value: seekValue });
     if (!seekValue) {
       toast.error("Ingresá un timestamp");
       return;
@@ -144,6 +148,7 @@ export function SessionControls({
   }, [handleAfterMutation, seekSession, seekValue, session.enabled, session.id, statusState.isRunning, statusState.isTerminal]);
 
   const handleEnable = useCallback(async () => {
+    console.debug("[SessionControls] enable clicked", { sessionId: session.id });
     try {
       await enableSession.mutateAsync(session.id);
       toast.success("Sesión habilitada");
@@ -154,6 +159,7 @@ export function SessionControls({
   }, [enableSession, handleAfterMutation, session.id]);
 
   const handleDisable = useCallback(async () => {
+    console.debug("[SessionControls] disable clicked", { sessionId: session.id });
     try {
       await disableSession.mutateAsync(session.id);
       toast.success("Sesión deshabilitada");
@@ -164,6 +170,7 @@ export function SessionControls({
   }, [disableSession, handleAfterMutation, session.id]);
 
   const handleDelete = useCallback(async () => {
+    console.debug("[SessionControls] delete clicked", { sessionId: session.id });
     const confirmed = window.confirm("¿Confirmás que querés eliminar la sesión?");
     if (!confirmed) {
       return;
