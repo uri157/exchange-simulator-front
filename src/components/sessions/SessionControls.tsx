@@ -193,6 +193,7 @@ export function SessionControls({
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Button
+            type="button"
             onClick={handleStart}
             disabled={
               startSession.isPending || statusState.isRunning || statusState.isEnded || !session.enabled
@@ -201,12 +202,14 @@ export function SessionControls({
             {startSession.isPending ? "Iniciando..." : "Start"}
           </Button>
           <Button
+            type="button"
             onClick={handlePause}
             disabled={pauseSession.isPending || !statusState.isRunning || !session.enabled}
           >
             {pauseSession.isPending ? "Pausando..." : "Pause"}
           </Button>
           <Button
+            type="button"
             onClick={handleResume}
             disabled={resumeSession.isPending || !statusState.isPaused || !session.enabled}
           >
@@ -221,6 +224,7 @@ export function SessionControls({
             disabled={!session.enabled || statusState.isTerminal || !statusState.isRunning}
           />
           <Button
+            type="button"
             onClick={handleSeek}
             disabled={
               seekSession.isPending || !session.enabled || statusState.isTerminal || !statusState.isRunning
@@ -232,6 +236,7 @@ export function SessionControls({
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
         <Button
+          type="button"
           variant="outline"
           onClick={session.enabled ? handleDisable : handleEnable}
           disabled={enableSession.isPending || disableSession.isPending || deleteSession.isPending}
@@ -244,7 +249,7 @@ export function SessionControls({
             ? "Habilitando..."
             : "Enable"}
         </Button>
-        <Button variant="destructive" onClick={handleDelete} disabled={deleteSession.isPending}>
+        <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleteSession.isPending}>
           {deleteSession.isPending ? "Eliminando..." : "Delete"}
         </Button>
       </CardFooter>
