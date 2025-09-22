@@ -35,6 +35,7 @@ import {
   type FetchKlinesParams,
   type RestKline,
 } from "@/lib/api";
+import type { WsTradeData } from "@/lib/types";
 
 function invalidateDatasetDependentQueries(
   queryClient: QueryClient,
@@ -236,6 +237,10 @@ export function useKlineTableData(klines: RestKline[]) {
   return useMemo(() => [...klines].sort((a, b) => b.closeTime - a.closeTime), [
     klines,
   ]);
+}
+
+export function useTradeTableData(trades: WsTradeData[]) {
+  return useMemo(() => [...trades].sort((a, b) => b.eventTime - a.eventTime), [trades]);
 }
 
 // --- Sessions ---

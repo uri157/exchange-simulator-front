@@ -1,3 +1,12 @@
+export type WsTradeData = {
+  symbol: string;
+  price: string;
+  qty: string;
+  quoteQty?: string;
+  isBuyerMaker: boolean;
+  eventTime: number;
+};
+
 export interface WsKlineData {
   symbol: string;
   interval: string;
@@ -19,7 +28,7 @@ export interface WsWarningData {
   skipped?: number;
 }
 
-export type WsEventType = "kline" | "stats" | "warning";
+export type WsEventType = "trade" | "kline" | "stats" | "warning";
 
 type WsMessageEnvelopeBase<TEvent extends WsEventType, TData> = {
   event: TEvent;
@@ -28,6 +37,7 @@ type WsMessageEnvelopeBase<TEvent extends WsEventType, TData> = {
 };
 
 export type WsMessageEnvelope =
+  | WsMessageEnvelopeBase<"trade", WsTradeData>
   | WsMessageEnvelopeBase<"kline", WsKlineData>
   | WsMessageEnvelopeBase<"stats", WsStatsData>
   | WsMessageEnvelopeBase<"warning", WsWarningData>;

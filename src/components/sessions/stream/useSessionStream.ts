@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import type { WsKlineData } from "@/lib/types";
+import type { WsTradeData } from "@/lib/types";
 import { buildWsRequest, parseWsEventData } from "@/lib/ws";
 
 import type { ConnectionState } from "./types";
@@ -12,7 +12,7 @@ interface UseSessionStreamOptions {
   sessionId: string;
   enabled: boolean;
   streams: string;
-  onKline: (kline: WsKlineData) => void;
+  onTrade: (trade: WsTradeData) => void;
   onReset: () => void;
 }
 
@@ -28,7 +28,7 @@ interface UseSessionStreamState {
   isConnecting: boolean;
   connections: number | null;
   activeStream: string | null;
-  lastKline: WsKlineData | null;
+  lastTrade: WsTradeData | null;
   closeMessage: string | null;
   errorMessage: string | null;
   consumedUrl: string | null;
@@ -44,14 +44,14 @@ export function useSessionStream({
   sessionId,
   enabled,
   streams,
-  onKline,
+  onTrade,
   onReset,
 }: UseSessionStreamOptions): UseSessionStreamResult {
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
   const [isConnecting, setIsConnecting] = useState(false);
   const [connections, setConnections] = useState<number | null>(null);
   const [activeStream, setActiveStream] = useState<string | null>(null);
-  const [lastKline, setLastKline] = useState<WsKlineData | null>(null);
+  const [lastTrade, setLastTrade] = useState<WsTradeData | null>(null);
   const [closeMessage, setCloseMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [consumedUrl, setConsumedUrl] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export function useSessionStream({
 
   const resetRuntimeState = useCallback(() => {
     setConnections(null);
-    setLastKline(null);
+    setLastTrade(null);
     onReset();
   }, [onReset]);
 
@@ -184,14 +184,14 @@ export function useSessionStream({
         const message = parseWsEventData(event.data);
         if (!message) return;
 
-        if (message.event === "kline") {
-          console.debug("[useSessionStream] websocket message:kline", {
+        if (message.event === "trade") {
+          console.debug("[useSessionStream] websocket message:trade", {
             sessionId,
             stream: message.stream,
-            closeTime: message.data.closeTime,
+            eventTime: message.data.eventTime,
           });
-          setLastKline(message.data);
-          onKline(message.data);
+          setLastTrade(message.data);
+          onTrade(message.data);
           return;
         }
 
@@ -213,7 +213,7 @@ export function useSessionStream({
           });
           const skipped =
             typeof message.data.skipped === "number" && Number.isFinite(message.data.skipped)
-              ? ` — velas omitidas: ${message.data.skipped}`
+              ? ` — eventos omitidos: ${message.data.skipped}`
               : "";
           const streamLabel = message.stream ? ` (${message.stream})` : "";
           toast.warning(`Aviso del stream${streamLabel}: ${message.data.type}${skipped}`);
@@ -284,7 +284,7 @@ export function useSessionStream({
     connectionState,
     enabled,
     isConnecting,
-    onKline,
+    onTrade,
     resetRuntimeState,
     sessionId,
     trimmedStreams,
@@ -327,7 +327,7 @@ export function useSessionStream({
     isConnecting,
     connections,
     activeStream,
-    lastKline,
+    lastTrade,
     closeMessage,
     errorMessage,
     consumedUrl,
