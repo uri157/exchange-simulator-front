@@ -231,10 +231,59 @@ El front **no** corta la conexión si no hay datos (permite conexiones ociosas).
 
 
 
-7. `src/infra/ws/broadcaster.rs` + configuración
 
-   * Ya está el buffer mínimo; si seguís viendo lag, subir `WS_BUFFER` (p. ej. 4096–8192) en la config/env del backend.
 
----
 
-Decime con cuál archivo del **frontend** querés empezar (si el WS vive dentro de `[id]/page.tsx`, pasame ese; si ya lo separaste, pasame `SessionStreamPanel.tsx`). Te lo devuelvo completo y corregido.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
