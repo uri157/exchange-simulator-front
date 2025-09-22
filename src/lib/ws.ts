@@ -5,6 +5,7 @@ import type {
   WsKlineData,
   WsMessageEnvelope,
   WsStatsData,
+  WsTradeData,
   WsWarningData,
 } from "@/lib/types";
 
@@ -87,6 +88,41 @@ function parseWsKlineData(value: unknown): WsKlineData | null {
   };
 }
 
+function parseWsTradeData(value: unknown): WsTradeData | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const symbol = typeof value.symbol === "string" ? value.symbol : null;
+  const price = toStringValue(value.price);
+  const qty = toStringValue(value.qty);
+  const eventTime = Number(value.eventTime);
+  const isBuyerMaker = typeof value.isBuyerMaker === "boolean" ? value.isBuyerMaker : null;
+
+  if (!symbol || !price || !qty) {
+    return null;
+  }
+
+  if (!Number.isFinite(eventTime) || isBuyerMaker === null) {
+    return null;
+  }
+
+  const trade: WsTradeData = {
+    symbol,
+    price,
+    qty,
+    isBuyerMaker,
+    eventTime,
+  };
+
+  const quoteQtyValue = toStringValue(value.quoteQty);
+  if (quoteQtyValue) {
+    trade.quoteQty = quoteQtyValue;
+  }
+
+  return trade;
+}
+
 function parseWsStatsData(value: unknown): WsStatsData | null {
   if (!isRecord(value)) {
     return null;
@@ -128,6 +164,11 @@ export function parseWsEnvelope(raw: unknown): WsMessageEnvelope | null {
   const event = envelope.event;
   const data = envelope.data;
   const stream = typeof envelope.stream === "string" ? envelope.stream : null;
+
+  if (event === "trade") {
+    const parsed = parseWsTradeData(data);
+    return parsed ? { event: "trade", data: parsed, stream } : null;
+  }
 
   if (event === "kline") {
     const parsed = parseWsKlineData(data);

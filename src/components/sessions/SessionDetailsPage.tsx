@@ -13,9 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SessionResponse } from "@/lib/api-types";
-import { useSession } from "@/lib/hooks";
+import { useSession, useTradeTableData } from "@/lib/hooks";
 import { formatDateTime, formatNumber } from "@/lib/time";
-import type { WsKlineData } from "@/lib/types";
+import type { WsTradeData } from "@/lib/types";
 
 const MAX_ROWS = 200;
 
@@ -34,7 +34,7 @@ export function SessionDetailsPage({ id, prefetched }: SessionDetailsPageProps) 
   const effectiveSessionId = session?.id ?? id;
 
   const [streams, setStreams] = useState(() => searchParams?.get("streams") ?? "");
-  const [wsRows, setWsRows] = useState<WsKlineData[]>([]);
+  const [wsTrades, setWsTrades] = useState<WsTradeData[]>([]);
   const [receivedCount, setReceivedCount] = useState(0);
 
   useEffect(() => {
@@ -79,27 +79,34 @@ export function SessionDetailsPage({ id, prefetched }: SessionDetailsPageProps) 
 
   useEffect(() => {
     console.debug("[SessionDetailsPage] streams changed", { sessionId: effectiveSessionId, streams });
-    setWsRows([]);
+    setWsTrades([]);
     setReceivedCount(0);
   }, [effectiveSessionId, streams]);
 
-  const handleKline = useCallback((kline: WsKlineData) => {
-    console.debug("[SessionDetailsPage] kline received", {
+  const handleTrade = useCallback((trade: WsTradeData) => {
+    console.debug("[SessionDetailsPage] trade received", {
       sessionId: effectiveSessionId,
-      closeTime: kline.closeTime,
+      eventTime: trade.eventTime,
     });
     setReceivedCount((prev) => prev + 1);
-    setWsRows((prev) => {
-      const map = new Map(prev.map((row) => [row.closeTime, row] as const));
-      map.set(kline.closeTime, kline);
-      const next = Array.from(map.values()).sort((a, b) => b.closeTime - a.closeTime);
-      return next.slice(0, MAX_ROWS);
+    setWsTrades((prev) => {
+      const key = `${trade.eventTime}-${trade.price}-${trade.qty}`;
+      const map = new Map<string, WsTradeData>();
+      map.set(key, trade);
+      for (const existing of prev) {
+        const existingKey = `${existing.eventTime}-${existing.price}-${existing.qty}`;
+        if (!map.has(existingKey)) {
+          map.set(existingKey, existing);
+        }
+      }
+      return Array.from(map.values()).slice(0, MAX_ROWS);
     });
   }, [effectiveSessionId]);
 
   const handleResetCounters = useCallback(() => {
     console.debug("[SessionDetailsPage] resetting counters", { sessionId: effectiveSessionId });
     setReceivedCount(0);
+    setWsTrades([]);
   }, [effectiveSessionId]);
 
   const handleStreamsChange = useCallback(
@@ -114,17 +121,21 @@ export function SessionDetailsPage({ id, prefetched }: SessionDetailsPageProps) 
     [effectiveSessionId, updateQuery]
   );
 
-  const columns = useMemo<DataTableColumn<WsKlineData>[]>(
+  const columns = useMemo<DataTableColumn<WsTradeData>[]>(
     () => [
-      { key: "closeTime", header: "Close time", render: (row) => formatDateTime(row.closeTime) },
-      { key: "open", header: "Open", render: (row) => formatNumber(row.open) },
-      { key: "high", header: "High", render: (row) => formatNumber(row.high) },
-      { key: "low", header: "Low", render: (row) => formatNumber(row.low) },
-      { key: "close", header: "Close", render: (row) => formatNumber(row.close) },
-      { key: "volume", header: "Volume", render: (row) => formatNumber(row.volume, 4) },
+      { key: "eventTime", header: "Evento", render: (row) => formatDateTime(row.eventTime) },
+      { key: "price", header: "Precio", render: (row) => formatNumber(row.price, 4) },
+      { key: "qty", header: "Cantidad", render: (row) => formatNumber(row.qty, 4) },
+      {
+        key: "quoteQty",
+        header: "Notional",
+        render: (row) => (row.quoteQty ? formatNumber(row.quoteQty, 2) : "—"),
+      },
     ],
     []
   );
+
+  const tradeTableData = useTradeTableData(wsTrades);
 
   if (!id) {
     return (
@@ -173,25 +184,25 @@ export function SessionDetailsPage({ id, prefetched }: SessionDetailsPageProps) 
           session={session}
           streams={streams}
           onStreamsChange={handleStreamsChange}
-          onKline={handleKline}
+          onTrade={handleTrade}
           onReset={handleResetCounters}
           receivedCount={receivedCount}
         />
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Últimas velas</CardTitle>
+            <CardTitle className="text-base">Últimos trades</CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="secondary">{receivedCount} recibidas</Badge>
-              <Badge variant="outline">{wsRows.length} en tabla</Badge>
+              <Badge variant="outline">{tradeTableData.length} en tabla</Badge>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
             <DataTable
-              data={wsRows}
+              data={tradeTableData}
               columns={columns}
               emptyMessage="Aguardando datos del stream"
-              getRowId={(row) => String(row.closeTime)}
+              getRowId={(row, index) => `${row.eventTime}-${row.price}-${row.qty}-${index}`}
             />
           </CardContent>
         </Card>
@@ -209,5 +220,5 @@ export function SessionDetailsPage({ id, prefetched }: SessionDetailsPageProps) 
 function buildDefaultStream(session: SessionResponse) {
   const symbol = session.symbols[0] ?? "";
   if (!symbol) return "";
-  return `kline@${session.interval}:${symbol}`;
+  return `aggTrades:${symbol}`;
 }

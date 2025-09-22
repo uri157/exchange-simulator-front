@@ -4,9 +4,9 @@ import { useMemo } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SessionResponse } from "@/lib/api-types";
-import type { WsKlineData } from "@/lib/types";
+import type { WsTradeData } from "@/lib/types";
 
-import { LastKlineCard } from "./LastKlineCard";
+import { LastTradeCard } from "./LastTradeCard";
 import { StreamControls } from "./StreamControls";
 import { StreamDebugInfo } from "./StreamDebugInfo";
 import { StreamInput } from "./StreamInput";
@@ -18,7 +18,7 @@ interface SessionStreamPanelProps {
   session: SessionResponse;
   streams: string;
   onStreamsChange: (value: string) => void;
-  onKline: (kline: WsKlineData) => void;
+  onTrade: (trade: WsTradeData) => void;
   onReset: () => void;
   receivedCount: number;
 }
@@ -27,7 +27,7 @@ export function SessionStreamPanel({
   session,
   streams,
   onStreamsChange,
-  onKline,
+  onTrade,
   onReset,
   receivedCount,
 }: SessionStreamPanelProps) {
@@ -36,7 +36,7 @@ export function SessionStreamPanel({
     isConnecting,
     connections,
     activeStream,
-    lastKline,
+    lastTrade,
     closeMessage,
     errorMessage,
     consumedUrl,
@@ -47,7 +47,7 @@ export function SessionStreamPanel({
     sessionId: session.id,
     enabled: session.enabled,
     streams,
-    onKline,
+    onTrade,
     onReset,
   });
 
@@ -56,9 +56,9 @@ export function SessionStreamPanel({
   const shortcuts = useMemo(() => {
     return session.symbols.map((symbol) => ({
       symbol,
-      value: `kline@${session.interval}:${symbol}`,
+      value: `aggTrades:${symbol}`,
     }));
-  }, [session.interval, session.symbols]);
+  }, [session.symbols]);
 
   const canConnect: boolean =
     session.enabled &&
@@ -85,7 +85,7 @@ export function SessionStreamPanel({
           shortcuts={shortcuts}
           disabled={isInputDisabled}
           activeStream={activeStream}
-          placeholder={`kline@${session.interval}:${session.symbols[0] ?? "BTCUSDT"}`}
+          placeholder={`aggTrades:${session.symbols[0] ?? "BTCUSDT"}`}
         />
 
         <StreamControls
@@ -101,7 +101,7 @@ export function SessionStreamPanel({
 
         <StreamDebugInfo url={consumedUrl} query={consumedQuery} activeStream={activeStream} />
 
-        {lastKline ? <LastKlineCard kline={lastKline} /> : null}
+        <LastTradeCard trade={lastTrade} />
       </CardContent>
     </Card>
   );
