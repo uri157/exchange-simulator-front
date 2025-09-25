@@ -1,34 +1,34 @@
 # Exchange Simulator Frontend (Next.js)
 
-Aplicación **Next.js** (App Router) para visualizar sesiones de *replay*, conectarse por **WebSocket** a los *streams* de velas y operar contra la API REST del backend.
+**Next.js** (App Router) app to visualize *replay* sessions, connect via **WebSocket** to candle streams, and operate against the backend’s REST API.
 
 ---
 
-## Requisitos
+## Requirements
 
-* **Node.js** 18.18+ o 20.x (recomendado LTS)
-* **npm** / **pnpm** / **yarn** (usa el que prefieras)
-* Backend del **exchange-simulator** corriendo (por defecto en `http://localhost:3001`)
+* **Node.js** 18.18+ or 20.x (LTS recommended)
+* **npm** / **pnpm** / **yarn** (use your preference)
+* The **exchange-simulator** backend running (defaults to `http://localhost:3001`)
 
 ---
 
-## Instalación
+## Installation
 
 ```bash
-# Clonar el repo y entrar al directorio
-git clone <url-del-repo-front>
+# Clone the repo and enter the directory
+git clone <frontend-repo-url>
 cd exchange-simulator-front
 
-# Instalar dependencias
+# Install dependencies
 npm install
-# o pnpm install / yarn
+# or pnpm install / yarn
 ```
 
 ---
 
-## Variables de entorno
+## Environment variables
 
-Crea un archivo **`.env.local`** en la raíz del proyecto. Puedes copiar el ejemplo:
+Create a **`.env.local`** file at the project root. You can copy the example:
 
 ```bash
 cp .env.local.example .env.local
@@ -37,66 +37,67 @@ cp .env.local.example .env.local
 ### `.env.local.example`
 
 ```dotenv
-# Base HTTP para las requests REST (sin slash final)
+# Base HTTP for REST requests (no trailing slash)
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
 
-# Base del WebSocket. Usa wss:// en producción detrás de HTTPS
+# WebSocket base. Use wss:// in production behind HTTPS
 NEXT_PUBLIC_WS_BASE_URL=ws://localhost:3001
 
-# Path expuesto por el backend para el WebSocket (con / inicial)
+# Backend WebSocket path (leading slash required)
 NEXT_PUBLIC_WS_PATH=/ws
 ```
 
-> **Notas**
+> **Notes**
 >
-> * Si despliegas el backend en otro dominio/puerto, actualiza estos valores.
-> * En producción, usa `wss://` para WebSocket seguro.
+> * If you deploy the backend to a different domain/port, update these values.
+> * In production, use `wss://` for a secure WebSocket.
 
 ---
 
-## Ejecutar en desarrollo
+## Run in development
 
 ```bash
 npm run dev
-# o pnpm dev / yarn dev
+# or pnpm dev / yarn dev
 ```
 
-Abre **[http://localhost:3000](http://localhost:3000)** en tu navegador.
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
 ---
 
-## Scripts útiles
+## Useful scripts
 
 ```bash
-npm run dev        # Desarrollo (Next + Turbopack)
-npm run build      # Build de producción
-npm run start      # Servir build de producción
-npm run lint       # Linter (ESLint)
+npm run dev        # Development (Next + Turbopack)
+npm run build      # Production build
+npm run start      # Serve production build
+npm run lint       # Lint with ESLint
 ```
 
 ---
 
-## Flujo de uso
+## Usage flow
 
-1. **Crear sesión** en `/sessions` (elige símbolos, intervalo y rango).
-2. **Entrar al detalle** de la sesión.
-3. **Conectar stream WS** desde el panel “Stream en vivo”.
+1. **Create a session** at `/sessions` (choose symbols, interval, and range).
+2. **Open the session detail** page.
+3. **Connect the WS stream** from the “Live stream” panel.
 
-   * Verás la **URL consumida** y la **query** (útil para depurar).
-   * El contador de **Recibidas** crece al llegar velas.
-4. **Start / Pause / Resume / Seek** controlan el *replay* en el backend.
-5. Si la sesión está **deshabilitada**, los botones de WS y control se bloquean.
+   * You’ll see the **consumed URL** and **query** (handy for debugging).
+   * The **Received** counter increments as candles arrive.
+4. **Start / Pause / Resume / Seek** control the backend replay.
+5. If the session is **disabled**, WS and control buttons are blocked.
 
 ---
 
-## WebSocket (comportamiento esperado)
+## WebSocket (expected behavior)
 
-* El front construye la URL con:
+* The frontend builds the URL with:
 
   * Base: `NEXT_PUBLIC_WS_BASE_URL`
-  * Path: `NEXT_PUBLIC_WS_PATH` (por defecto `/ws`)
+  * Path: `NEXT_PUBLIC_WS_PATH` (default `/ws`)
   * Query: `?sessionId=<UUID>&streams=<STREAMS>`
-* Formato de mensajes soportado (backend actual):
+
+* Supported message format (current backend):
 
   ```json
   {
@@ -115,126 +116,62 @@ npm run lint       # Linter (ESLint)
     "stream": "kline@1m:ETHBTC"
   }
   ```
-* Mensajes de **stats** (si el backend los emite):
+
+* **Stats** messages (if the backend emits them):
 
   ```json
   { "event": "stats", "data": { "connections": 3 } }
   ```
 
-El front **no** corta la conexión si no hay datos (permite conexiones ociosas).
+The frontend **does not** close the connection when idle (idle connections are allowed).
 
 ---
 
-## Endpoints REST relevantes
+## Relevant REST endpoints
 
-> La API del backend puede evolucionar; valida en su repo. Estos son los consumidos actualmente por el front:
+> The backend API may evolve—check its repo. These are the ones currently consumed by the frontend:
 
-* `GET /api/v1/sessions` — listar sesiones
-* `POST /api/v1/sessions` — crear sesión
-* `GET /api/v1/sessions/:id` — detalle
-* `POST /api/v1/sessions/:id/start` — iniciar
-* `POST /api/v1/sessions/:id/pause` — pausar
-* `POST /api/v1/sessions/:id/resume` — reanudar
-* `POST /api/v1/sessions/:id/seek?to=<ms>` — buscar timestamp
-* `PATCH /api/v1/sessions/:id/enable` — habilitar
-* `PATCH /api/v1/sessions/:id/disable` — deshabilitar
-* `DELETE /api/v1/sessions/:id` — borrar
+* `GET /api/v1/sessions` — list sessions
+* `POST /api/v1/sessions` — create session
+* `GET /api/v1/sessions/:id` — detail
+* `POST /api/v1/sessions/:id/start` — start
+* `POST /api/v1/sessions/:id/pause` — pause
+* `POST /api/v1/sessions/:id/resume` — resume
+* `POST /api/v1/sessions/:id/seek?to=<ms>` — seek to timestamp
+* `PATCH /api/v1/sessions/:id/enable` — enable
+* `PATCH /api/v1/sessions/:id/disable` — disable
+* `DELETE /api/v1/sessions/:id` — delete
 
 ---
 
 ## Troubleshooting
 
-* **No veo velas**:
+* **No candles visible:**
 
-  * Verifica que el **WS\_CONSUMED\_URL** y **WS\_CONSUMED\_QUERY** (mostrados en la UI) tengan `sessionId` y `streams` correctos.
-  * Asegúrate de que la sesión esté **habilitada** y en estado correcto (tras “Start”).
-  * Confirma que el rango de la sesión intersecta con datos reales (curl contra `/api/v1/market/klines` o `/api/v3/klines` del backend).
-* **CORS / WS bloqueado**:
+  * Check that **WS_CONSUMED_URL** and **WS_CONSUMED_QUERY** (shown in the UI) include the correct `sessionId` and `streams`.
+  * Make sure the session is **enabled** and in the correct state (after “Start”).
+  * Confirm the session’s range overlaps real data (curl the backend’s `/api/v1/market/klines` or `/api/v3/klines`).
 
-  * Asegúrate de que el backend tenga CORS permisivo en dev.
-  * En producción usa `wss://` y configura proxies/reverse-ports.
-* **Códigos de cierre WS**:
+* **CORS / WS blocked:**
 
-  * `1000`: cierre normal.
-  * `1006`: cierre anormal (ver red/proxy).
-  * `1011`: error interno / keepalive timeout lado servidor.
-* **Cambio de dominios**:
+  * Ensure the backend has permissive CORS in dev.
+  * In production, use `wss://` and configure proxies/reverse ports.
 
-  * Ajusta `.env.local` (API y WS), reinicia `npm run dev`.
+* **WS close codes:**
+
+  * `1000`: normal close.
+  * `1006`: abnormal close (check network/proxy).
+  * `1011`: internal error / keepalive timeout on the server side.
+
+* **Changing domains:**
+
+  * Adjust `.env.local` (API and WS), then restart `npm run dev`.
 
 ---
 
-## Estilo y librerías
+## Style & libraries
 
-* **Next.js 15 / React 19** (app router)
+* **Next.js 15 / React 19** (App Router)
 * **TypeScript**
 * **shadcn/ui**, **Radix**, **tailwindcss**
-* **ESLint** integrado (`npm run lint`)
-
----
-
-## Deploy
-
-1. Configura las variables de entorno en el proveedor (Vercel/Nginx/…):
-
-   * `NEXT_PUBLIC_API_BASE_URL`
-   * `NEXT_PUBLIC_WS_BASE_URL` (usa `wss://` detrás de TLS)
-   * `NEXT_PUBLIC_WS_PATH`
-2. `npm run build` y servir con `npm run start` (o usa tu plataforma preferida).
-
----
-
-## Contribuir
-
-* Abre un issue/PR con descripción clara de la mejora/bug.
-* Acompaña reproducciones (logs de **WS\_CONSUMED\_URL** ayudan mucho).
-
----
-
-¡Listo! Con esto deberías poder levantar el front, apuntarlo a tu backend y depurar fácilmente tanto REST como WS.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-7. `src/infra/ws/broadcaster.rs` + configuración
-
-   * Ya está el buffer mínimo; si seguís viendo lag, subir `WS_BUFFER` (p. ej. 4096–8192) en la config/env del backend.
-
----
-
-Decime con cuál archivo del **frontend** querés empezar (si el WS vive dentro de `[id]/page.tsx`, pasame ese; si ya lo separaste, pasame `SessionStreamPanel.tsx`). Te lo devuelvo completo y corregido.
+* **ESLint** integrated (`npm run lint`)
