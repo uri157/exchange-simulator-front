@@ -97,33 +97,42 @@ npm run lint       # Lint with ESLint
   * Path: `NEXT_PUBLIC_WS_PATH` (default `/ws`)
   * Query: `?sessionId=<UUID>&streams=<STREAMS>`
 
-* Supported message format (current backend):
+* Supported messages (current backend):
 
-  ```json
-  {
-    "event": "kline",
-    "data": {
-      "symbol": "ETHBTC",
-      "interval": "1m",
-      "openTime": 1758150240000,
-      "closeTime": 1758150299999,
-      "open": 0.03942,
-      "high": 0.03946,
-      "low": 0.03942,
-      "close": 0.03946,
-      "volume": 66.5555
-    },
-    "stream": "kline@1m:ETHBTC"
-  }
-  ```
+**Kline**
 
-* **Stats** messages (if the backend emits them):
+```json
+{
+  "event": "kline",
+  "data": {
+    "symbol": "ETHBTC",
+    "interval": "1m",
+    "openTime": 1758150240000,
+    "closeTime": 1758150299999,
+    "open": 0.03942,
+    "high": 0.03946,
+    "low": 0.03942,
+    "close": 0.03946,
+    "volume": 66.5555
+  },
+  "stream": "kline@1m:ETHBTC"
+}
+```
 
-  ```json
-  { "event": "stats", "data": { "connections": 3 } }
-  ```
+**Stats (optional)**
 
-The frontend **does not** close the connection when idle (idle connections are allowed).
+```json
+{ "event": "stats", "data": { "connections": 3 } }
+```
+
+**Warning (optional)**
+
+```json
+{ "event": "warning", "data": { "type": "...", "skipped": 0 }, "stream": "..." }
+```
+
+> The client parses `kline`, `stats`, and `warning` envelopes. The UI may surface warnings via toasts.
+> The frontend **does not** close the connection when idle (idle connections are allowed).
 
 ---
 
@@ -131,16 +140,16 @@ The frontend **does not** close the connection when idle (idle connections are a
 
 > The backend API may evolve—check its repo. These are the ones currently consumed by the frontend:
 
-* `GET /api/v1/sessions` — list sessions
-* `POST /api/v1/sessions` — create session
-* `GET /api/v1/sessions/:id` — detail
-* `POST /api/v1/sessions/:id/start` — start
-* `POST /api/v1/sessions/:id/pause` — pause
-* `POST /api/v1/sessions/:id/resume` — resume
+* `GET  /api/v1/sessions`                  — list sessions
+* `POST /api/v1/sessions`                  — create session
+* `GET  /api/v1/sessions/:id`              — detail
+* `POST /api/v1/sessions/:id/start`        — start
+* `POST /api/v1/sessions/:id/pause`        — pause
+* `POST /api/v1/sessions/:id/resume`       — resume
 * `POST /api/v1/sessions/:id/seek?to=<ms>` — seek to timestamp
-* `PATCH /api/v1/sessions/:id/enable` — enable
-* `PATCH /api/v1/sessions/:id/disable` — disable
-* `DELETE /api/v1/sessions/:id` — delete
+* `PATCH /api/v1/sessions/:id/enable`      — enable
+* `PATCH /api/v1/sessions/:id/disable`     — disable
+* `DELETE /api/v1/sessions/:id`            — delete
 
 ---
 
